@@ -1,8 +1,0 @@
-now lets implement Wi-Fi (Multipeer Connectivity framework)
-Using Apple's Multipeer Connectivity framework for same-network communication.
-Change the instructions after a few second to say:
-
-"make sure your family member's phone is on your same wifi."
-
-define a service and start the adveritsing and browsing. Include lots of logs so we can debug Multipeer Connectivity framework
-
