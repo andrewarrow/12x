@@ -1,8 +1,10 @@
 import SwiftUI
+import Foundation
 
 struct OnboardingView: View {
     @State private var progressValue: Double = 0.0
     @State private var emojiIndex = 0
+    @State private var debugText = "Initializing..."
     
     let emojis = ["📱", "🔄", "✨", "🚀", "🔍", "📡"]
     
@@ -47,15 +49,30 @@ struct OnboardingView: View {
                 }
                 .padding()
                 
+                // Debug text - shows log status
+                Text(debugText)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
                 Spacer()
             }
             .padding()
             .navigationTitle("Setup")
             .onAppear {
+                print("ONBOARDING VIEW APPEARED")
+                debugText = "View appeared at \(formattedTime(Date()))"
+                
                 startProgressAnimation()
                 startEmojiAnimation()
+                startDebugUpdates()
             }
         }
+    }
+    
+    private func formattedTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter.string(from: date)
     }
     
     func startProgressAnimation() {
@@ -64,6 +81,7 @@ struct OnboardingView: View {
             withAnimation {
                 if progressValue >= 1.0 {
                     progressValue = 0.0
+                    print("Progress reset at \(formattedTime(Date()))")
                 } else {
                     progressValue += 0.01
                 }
@@ -77,6 +95,17 @@ struct OnboardingView: View {
             withAnimation {
                 emojiIndex = (emojiIndex + 1) % emojis.count
             }
+        }
+    }
+    
+    func startDebugUpdates() {
+        // Update debug text periodically to show app is running
+        var count = 0
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { timer in
+            count += 1
+            let runTime = Int(timer.timeInterval * Double(count))
+            debugText = "Running for \(runTime)s (at \(formattedTime(Date())))"
+            print("App running for \(runTime) seconds")
         }
     }
 }

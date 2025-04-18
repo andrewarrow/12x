@@ -1,8 +1,10 @@
 import SwiftUI
+import Foundation
 
 struct OnboardingView: View {
     @State private var progressValue: Double = 0.0
     @State private var emojiIndex = 0
+    @State private var debugText = "Initializing..."
     
     let emojis = ["📱", "🔄", "✨", "🚀", "🔍", "📡"]
     
@@ -47,15 +49,54 @@ struct OnboardingView: View {
                 }
                 .padding()
                 
+                // Debug text - hidden in production
+                Text(debugText)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding()
+                
                 Spacer()
             }
             .padding()
             .navigationTitle("Setup")
             .onAppear {
+                // Log that we reached this view
+                logMessage("ONBOARDING VIEW APPEARED")
+                
                 startProgressAnimation()
                 startEmojiAnimation()
+                startDebugUpdates()
             }
         }
+    }
+    
+    func logMessage(_ message: String) {
+        print(message)
+        NSLog(message)
+        debugText = "\(message) at \(formattedTime(Date()))"
+        
+        // Write to a file as a last resort
+        let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
+        let logFilePath = "\(documentsPath)/12x_app.log"
+        
+        let logEntry = "\(formattedTime(Date())): \(message)\n"
+        if let data = logEntry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFilePath) {
+                if let fileHandle = try? FileHandle(forWritingTo: URL(fileURLWithPath: logFilePath)) {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                try? data.write(to: URL(fileURLWithPath: logFilePath))
+            }
+        }
+    }
+    
+    private func formattedTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter.string(from: date)
     }
     
     func startProgressAnimation() {
@@ -77,6 +118,13 @@ struct OnboardingView: View {
             withAnimation {
                 emojiIndex = (emojiIndex + 1) % emojis.count
             }
+        }
+    }
+    
+    func startDebugUpdates() {
+        // Update debug text periodically
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { timer in
+            logMessage("App running: \(Int(timer.timeInterval * timer.fireCount)) seconds elapsed")
         }
     }
 }

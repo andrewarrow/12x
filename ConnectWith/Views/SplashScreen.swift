@@ -1,7 +1,9 @@
 import SwiftUI
+import Foundation
 
 struct SplashScreen: View {
     @Binding var isShowingSplash: Bool
+    let startupTime = Date()
     
     var body: some View {
         ZStack {
@@ -20,9 +22,17 @@ struct SplashScreen: View {
                     .frame(width: 100, height: 100)
                     .foregroundColor(.white)
                     .padding()
+                
+                // Display startup confirmation
+                Text("App Started at: \(formattedTime(startupTime))")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding()
             }
         }
         .onAppear {
+            print("SPLASH SCREEN APPEARED at \(formattedTime(Date()))")
+            
             // Auto-dismiss splash screen after 2 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 withAnimation {
@@ -30,6 +40,12 @@ struct SplashScreen: View {
                 }
             }
         }
+    }
+    
+    private func formattedTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter.string(from: date)
     }
 }
 
