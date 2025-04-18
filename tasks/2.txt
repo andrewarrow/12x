@@ -1,0 +1,17 @@
+now lets implement Wi-Fi (Multipeer Connectivity framework)
+Using Apple's Multipeer Connectivity framework for same-network communication.
+Change the instructions after a few second to say:
+
+"make sure your family member's phone is on your same wifi."
+
+define a service called "12x" and do
+
+Create a session with your service type identifier
+Configure the session with a display name and optional security settings
+Start advertising your service OR start browsing for advertisers
+Handle invitation events (sending/receiving)
+Exchange data once connected
+
+Both founds should advertise and both should browse. The goal is to display
+the name of the phone on each other's screen when found.
+Once found stop the process bar and show success emoji.
