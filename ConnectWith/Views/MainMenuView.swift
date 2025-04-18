@@ -490,8 +490,10 @@ struct OnboardingView: View {
     @State private var progressValue: Double = 0.0
     @State private var emojiIndex = 0
     @State private var debugText = "Initializing..."
+    @State private var showDeviceSelectionView = false
     @State private var showDevicesList = false
     @State private var runTime: Int = 0
+    @State private var hasFoundDevices = false
     
     // Track active timers to avoid duplicates
     @State private var progressTimer: Timer? = nil
@@ -502,95 +504,102 @@ struct OnboardingView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 30) {
-                Text("Welcome to 12x")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding()
-                
-                Text(bluetoothManager.scanningMessage)
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-                
-                HStack {
-                    // Emoji animation
-                    ZStack {
-                        ForEach(0..<emojis.count, id: \.self) { index in
-                            Text(emojis[index])
-                                .font(.system(size: 40))
-                                .opacity(index == emojiIndex ? 1 : 0)
-                                .scaleEffect(index == emojiIndex ? 1.2 : 1.0)
-                                .animation(.spring(response: 0.5, dampingFraction: 0.6), value: emojiIndex)
-                        }
-                    }
-                    .frame(width: 60, height: 60)
-                    
-                    ProgressView(value: progressValue)
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .tint(.blue)
-                        .frame(height: 10)
-                }
-                .padding(.horizontal)
-                
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Now have your family member also install this app and launch it on their phone.")
-                        .font(.body)
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(10)
-                }
-                .padding()
-                
-                // Shows found devices count
-                if !bluetoothManager.nearbyDevices.isEmpty {
-                    Button(action: {
-                        showDevicesList = true
-                    }) {
-                        HStack {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .foregroundColor(.green)
-                            Text("Found \(bluetoothManager.nearbyDevices.count) device\(bluetoothManager.nearbyDevices.count == 1 ? "" : "s")")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                        }
-                        .padding()
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(10)
-                    }
-                }
-                
-                // Debug text - shows log status
-                Text(debugText)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                
-                Spacer()
-                
-                if bluetoothManager.nearbyDevices.isEmpty {
-                    Text("Waiting for devices...")
-                        .foregroundColor(.secondary)
-                } else {
+            ZStack {
+                if hasFoundDevices {
+                    // Show the select devices view when devices are found
                     NavigationLink(
-                        destination: DevicesListView(bluetoothManager: bluetoothManager),
-                        isActive: $showDevicesList
+                        destination: SelectDevicesView(bluetoothManager: bluetoothManager),
+                        isActive: $showDeviceSelectionView
                     ) {
+                        EmptyView()
+                    }
+                    .hidden()
+                    
+                    // The transition UI, shown briefly before navigation
+                    VStack(spacing: 30) {
+                        Text("Device Found!")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.green)
+                        
+                        Text("Connecting you to your family")
+                            .font(.title3)
+                        
                         Button(action: {
-                            showDevicesList = true
+                            showDeviceSelectionView = true
                         }) {
-                            Text("View Available Devices")
+                            Text("Select Family Members")
                                 .font(.headline)
                                 .foregroundColor(.white)
                                 .padding()
                                 .frame(maxWidth: .infinity)
-                                .background(Color.blue)
+                                .background(Color.green)
                                 .cornerRadius(10)
                                 .padding(.horizontal)
                         }
+                        .padding(.top, 40)
                     }
+                    .padding()
+                    .onAppear {
+                        // Auto-navigate after a brief pause to show the green screen
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showDeviceSelectionView = true
+                        }
+                    }
+                } else {
+                    // Original onboarding UI when no devices found yet
+                    VStack(spacing: 30) {
+                        Text("Welcome to 12x")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .padding()
+                        
+                        Text(bluetoothManager.scanningMessage)
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                        
+                        HStack {
+                            // Emoji animation
+                            ZStack {
+                                ForEach(0..<emojis.count, id: \.self) { index in
+                                    Text(emojis[index])
+                                        .font(.system(size: 40))
+                                        .opacity(index == emojiIndex ? 1 : 0)
+                                        .scaleEffect(index == emojiIndex ? 1.2 : 1.0)
+                                        .animation(.spring(response: 0.5, dampingFraction: 0.6), value: emojiIndex)
+                                }
+                            }
+                            .frame(width: 60, height: 60)
+                            
+                            ProgressView(value: progressValue)
+                                .progressViewStyle(LinearProgressViewStyle())
+                                .tint(.blue)
+                                .frame(height: 10)
+                        }
+                        .padding(.horizontal)
+                        
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("Now have your family member also install this app and launch it on their phone.")
+                                .font(.body)
+                                .padding()
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(10)
+                        }
+                        .padding()
+                        
+                        // Debug text - shows log status
+                        Text(debugText)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        Spacer()
+                        
+                        Text("Waiting for devices...")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .navigationTitle("Setup")
                 }
             }
-            .padding()
-            .navigationTitle("Setup")
             .onAppear {
                 print("ONBOARDING VIEW APPEARED")
                 debugText = "View appeared at \(formattedTime(Date()))"
@@ -598,12 +607,28 @@ struct OnboardingView: View {
                 // Only start animations and timers if they're not already running
                 startAnimationsAndTimers()
                 
-                // We don't need to manually call startScanning and startAdvertising here
-                // because the BluetoothManager already does this in centralManagerDidUpdateState
+                // Setup observer for device discovery
+                startDeviceObserver()
             }
             .onDisappear {
                 // Clean up timers when view disappears
                 stopTimers()
+            }
+        }
+    }
+    
+    private func startDeviceObserver() {
+        // Create an observer to watch for device discovery
+        DispatchQueue.main.async {
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+                if !bluetoothManager.nearbyDevices.isEmpty && !hasFoundDevices {
+                    // When first device is found, stop animations and show the transition
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        hasFoundDevices = true
+                        stopTimers()
+                    }
+                    timer.invalidate()
+                }
             }
         }
     }
@@ -675,4 +700,151 @@ struct OnboardingView: View {
 
 #Preview {
     OnboardingView()
+}
+
+// MARK: - Device Selection Views
+
+// SelectDevicesView for choosing devices to connect with
+struct SelectDevicesView: View {
+    @ObservedObject var bluetoothManager: BluetoothManager
+    @State private var selectedDevices: Set<UUID> = []
+    @State private var showNextScreen = false
+    
+    var body: some View {
+        ZStack {
+            // Background color change to indicate stage transition
+            Color.green.opacity(0.2).ignoresSafeArea()
+            
+            VStack(spacing: 20) {
+                Text("Family Devices Found!")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.green)
+                    .padding(.top, 30)
+                
+                // Device list
+                List {
+                    ForEach(bluetoothManager.nearbyDevices, id: \.identifier) { device in
+                        DeviceSelectionRow(
+                            device: device,
+                            isSelected: selectedDevices.contains(device.identifier),
+                            toggleSelection: {
+                                if selectedDevices.contains(device.identifier) {
+                                    selectedDevices.remove(device.identifier)
+                                } else {
+                                    selectedDevices.insert(device.identifier)
+                                }
+                            }
+                        )
+                    }
+                }
+                .listStyle(InsetGroupedListStyle())
+                
+                Text("Select family members' devices to connect with")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+                
+                NavigationLink(
+                    destination: NextView(selectedDevices: selectedDevices, bluetoothManager: bluetoothManager),
+                    isActive: $showNextScreen
+                ) {
+                    Button(action: {
+                        showNextScreen = true
+                    }) {
+                        Text("Next")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.green)
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                    }
+                }
+                .padding(.bottom, 30)
+                .disabled(selectedDevices.isEmpty)
+                .opacity(selectedDevices.isEmpty ? 0.6 : 1.0)
+            }
+            .padding()
+        }
+        .navigationTitle("Select Devices")
+        .navigationBarBackButtonHidden(true)
+    }
+}
+
+struct DeviceSelectionRow: View {
+    let device: CBPeripheral
+    let isSelected: Bool
+    let toggleSelection: () -> Void
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(device.name ?? "Unknown Device")
+                    .font(.headline)
+                
+                Text(device.identifier.uuidString)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                .font(.title2)
+                .foregroundColor(isSelected ? .green : .gray)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            toggleSelection()
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+// NextView for showing selected devices and confirming completion
+struct NextView: View {
+    let selectedDevices: Set<UUID>
+    @ObservedObject var bluetoothManager: BluetoothManager
+    
+    var body: some View {
+        VStack(spacing: 30) {
+            Text("Family Connected!")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .foregroundColor(.green)
+            
+            Image(systemName: "checkmark.circle.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 100, height: 100)
+                .foregroundColor(.green)
+            
+            Text("You've successfully selected \(selectedDevices.count) family device\(selectedDevices.count == 1 ? "" : "s").")
+                .font(.title3)
+                .multilineTextAlignment(.center)
+                .padding()
+            
+            List {
+                Section(header: Text("Selected Devices")) {
+                    ForEach(bluetoothManager.nearbyDevices.filter { selectedDevices.contains($0.identifier) }, id: \.identifier) { device in
+                        HStack {
+                            Image(systemName: "iphone.circle.fill")
+                                .foregroundColor(.green)
+                            Text(device.name ?? "Unknown Device")
+                        }
+                    }
+                }
+            }
+            .listStyle(InsetGroupedListStyle())
+            
+            Spacer()
+            
+            Text("Continue setting up your family connections")
+                .font(.callout)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .navigationTitle("Setup Complete")
+    }
 }
