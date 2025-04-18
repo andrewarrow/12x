@@ -13,6 +13,10 @@
 		38A1B8E12AC0D83A00EB14A5 /* SplashScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8E02AC0D83A00EB14A5 /* SplashScreen.swift */; };
 		38A1B8E32AC0D84700EB14A5 /* MainMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8E22AC0D84700EB14A5 /* MainMenuView.swift */; };
 		38A1B8E52AC0D85400EB14A5 /* MenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8E42AC0D85400EB14A5 /* MenuButton.swift */; };
+		F3E9A1012BAF9A0100E5D6B1 /* BluetoothManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E9A1002BAF9A0100E5D6B1 /* BluetoothManager.swift */; };
+		F3E9A1032BAF9A1100E5D6B1 /* DeviceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E9A1022BAF9A1100E5D6B1 /* DeviceStore.swift */; };
+		F3E9A1052BAF9A2200E5D6B1 /* DevicesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E9A1042BAF9A2200E5D6B1 /* DevicesListView.swift */; };
+		F3E9A1072BAF9A3300E5D6B1 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F3E9A1062BAF9A3300E5D6B1 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +27,10 @@
 		38A1B8E02AC0D83A00EB14A5 /* SplashScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreen.swift; sourceTree = "<group>"; };
 		38A1B8E22AC0D84700EB14A5 /* MainMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenuView.swift; sourceTree = "<group>"; };
 		38A1B8E42AC0D85400EB14A5 /* MenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuButton.swift; sourceTree = "<group>"; };
+		F3E9A1002BAF9A0100E5D6B1 /* BluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothManager.swift; sourceTree = "<group>"; };
+		F3E9A1022BAF9A1100E5D6B1 /* DeviceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceStore.swift; sourceTree = "<group>"; };
+		F3E9A1042BAF9A2200E5D6B1 /* DevicesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesListView.swift; sourceTree = "<group>"; };
+		F3E9A1062BAF9A3300E5D6B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -291,7 +299,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"ConnectWith/Preview Content\"";
 				DEVELOPMENT_TEAM = 755R3VBZ84;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = 12x;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -324,7 +333,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"ConnectWith/Preview Content\"";
 				DEVELOPMENT_TEAM = 755R3VBZ84;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = 12x;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

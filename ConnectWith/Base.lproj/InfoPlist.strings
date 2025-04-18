@@ -1,0 +1,3 @@
+"NSBluetoothAlwaysUsageDescription" = "This app uses Bluetooth to connect with nearby family members' devices";
+"NSBluetoothPeripheralUsageDescription" = "This app uses Bluetooth to connect with nearby family members' devices";
+"CFBundleDisplayName" = "12x Connect";
