@@ -1,0 +1,107 @@
+now let's implement real bluetooth connections. Never use any simulated devices or mock anything.
+Everything we do will be run on two or more real devices.
+
+Your goal for this task is to advertise a guid so we know which devices are running this app. Show a list of these devices when they are found. Here is how to do the bluetooth stuff:
+
+
+# Bluetooth System Architecture in ConnectWith App
+
+## Overview
+The system uses Core Bluetooth for handling Bluetooth Low Energy (BLE) connections.
+
+## Key Components
+
+### 1. BluetoothManager 
+Central class that implements Bluetooth functionality as both Central and Peripheral roles:
+
+- **Central Role**: Scans for nearby devices, connects to them, discovers services/characteristics
+- **Peripheral Role**: Advertises this device, handles incoming connections, provides calendar data
+
+Key properties:
+- `centralManager`: For discovering and connecting to other devices
+- `peripheralManager`: For advertising this device and responding to connections
+- `nearbyDevices`: Stores discovered devices during scanning
+- `connectedPeripherals`: Tracks currently connected devices
+- `isScanning`, `isAdvertising`, etc.: State tracking properties
+- Custom UUIDs: `serviceUUID` and `calendarCharacteristicUUID` for service identification
+
+### 2. DeviceStore 
+In-memory store for Bluetooth devices:
+
+- Stores discovered devices by identifier 
+- Provides methods to save/retrieve device information
+- Tracks name, identifier, last seen timestamp, and manufacturer data
+- Used instead of CoreData for simplicity and reliability
+
+### 3. BluetoothDevice+Extensions.swift
+CoreData model extension for persistent device storage (though DeviceStore is primarily used):
+
+- Defines NSManagedObject subclass for CoreData storage
+- Properties: identifier, deviceName, lastSeen, etc.
+- Original implementation, but largely replaced by in-memory DeviceStore
+
+### 5. Bluetooth Data Flow
+
+**Device Discovery**:
+1. `startScanning()` initiates scan for nearby devices
+2. Discovery handled in `centralManager(_:didDiscover:advertisementData:rssi:)`
+3. Devices saved to `nearbyDevices` array and DeviceStore
+4. UI updated to show discovered devices
+
+**Device Connection**:
+1. `connectToDevice(_:)` initiates connection to a peripheral
+2. Connection events handled by delegate methods:
+   - `centralManager(_:didConnect:)` on successful connection
+   - `centralManager(_:didFailToConnect:error:)` on failure
+3. Service discovery using `peripheral.discoverServices()`
+4. Characteristic discovery using `peripheral.discoverCharacteristics()`
+
+
+**Advertisement**:
+1. `startAdvertising()` begins advertising this device
+2. Creates a service with the app's UUID
+3. Adds calendar characteristic to the service
+4. Advertises with name and service UUID
+5. Handles incoming connections from other devices
+
+### 6. User Interface Components
+
+- Shows list of discovered/saved devices
+- DeviceRow displays device name, ID, and last seen time
+- Detailed debugging interface for Bluetooth operations
+- Shows device info, nearby devices, connection status
+- Displays sync history and data transfer details
+- Provides controls for manual scanning and syncing
+
+## Low-Level Implementation Details
+
+### UUID Registration
+- Service UUID: `4514d666-d6c9-49cb-bc31-dc6dfa28bd58`
+- Calendar Characteristic UUID: `97d52a22-9292-48c6-a89f-8a71d89c5e9b`
+
+### Device Identification
+- Uses device UUID from `CBPeripheral.identifier`
+- Stores device names from advertisement data or peripheral name
+- Allows custom naming of devices by users
+
+### Discovery Optimization
+- Uses both general scanning (nil services) for all devices
+- Also specifically scans for the app's service UUID
+- Advertising includes device name for friendly identification
+- Background scanning occurs periodically to maintain connections
+
+### Security Considerations
+- Does not implement encryption beyond what BLE provides
+- Uses unique UUIDs to avoid collisions with other apps
+- Permissions handled via standard iOS Bluetooth permission dialogs
+
+## Debugging Features
+- Comprehensive logging throughout Bluetooth operations
+- Debug view shows detailed connection state and history
+- Tracks data transfer size, direction, and timestamp
+- Displays properly formatted JSON content of transferred data
+
+## Known Limitations
+- iOS may throttle background Bluetooth operations
+- Limited to approximately 10 seconds of active scanning
+- Bluetooth permissions must be explicitly granted by user
