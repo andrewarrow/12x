@@ -9,7 +9,7 @@ struct ConnectWithApp: App {
             if isShowingSplash {
                 SplashScreen(isShowingSplash: $isShowingSplash)
             } else {
-                MainMenuView()
+                OnboardingView()
             }
         }
     }
