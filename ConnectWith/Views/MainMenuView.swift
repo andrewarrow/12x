@@ -3,7 +3,69 @@ import Foundation
 import CoreBluetooth
 import UIKit
 
-// Full implementation of BluetoothManager 
+// Define DeviceStore here for simplicity
+class DeviceStore {
+    static let shared = DeviceStore()
+    
+    private init() {}
+    
+    // In-memory store for devices
+    private var devices: [String: BluetoothDeviceInfo] = [:]
+    private let queue = DispatchQueue(label: "com.12x.DeviceStoreQueue", attributes: .concurrent)
+    
+    struct BluetoothDeviceInfo {
+        let identifier: String
+        var name: String
+        var lastSeen: Date
+    }
+    
+    // Add or update a device
+    func addDevice(identifier: String, name: String) {
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            let device = BluetoothDeviceInfo(
+                identifier: identifier,
+                name: name,
+                lastSeen: Date()
+            )
+            self.devices[identifier] = device
+        }
+    }
+    
+    // Get all devices
+    func getAllDevices() -> [BluetoothDeviceInfo] {
+        var result: [BluetoothDeviceInfo] = []
+        queue.sync {
+            result = Array(devices.values)
+        }
+        return result
+    }
+    
+    // Get a specific device
+    func getDevice(identifier: String) -> BluetoothDeviceInfo? {
+        var result: BluetoothDeviceInfo?
+        queue.sync {
+            result = devices[identifier]
+        }
+        return result
+    }
+    
+    // Update a device's last seen time
+    func updateLastSeen(identifier: String) {
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            if var device = self.devices[identifier] {
+                device.lastSeen = Date()
+                self.devices[identifier] = device
+            }
+        }
+    }
+}
+
+// Define BluetoothManager here since we can't easily reference it from another file
+// This implementation includes the thread fixes
+
+// MARK: - BluetoothManager
 class BluetoothManager: NSObject, ObservableObject {
     // MARK: - Published Properties
     @Published var nearbyDevices: [CBPeripheral] = []
@@ -18,6 +80,12 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // MARK: - UUIDs
     private let serviceUUID = CBUUID(string: "4514d666-d6c9-49cb-bc31-dc6dfa28bd58")
+    
+    // MARK: - Device Store
+    private let deviceStore = DeviceStore.shared
+    
+    // Use a dedicated serial queue for Bluetooth operations
+    private let bluetoothQueue = DispatchQueue(label: "com.12x.BluetoothQueue", qos: .userInitiated)
     
     // MARK: - Initialization
     override init() {
@@ -47,40 +115,18 @@ class BluetoothManager: NSObject, ObservableObject {
         // Initialize with options that explicitly request authorization
         let centralOptions: [String: Any] = [
             CBCentralManagerOptionShowPowerAlertKey: true
-            // We now have the delegate method, but leaving this off for simplicity
-            // CBCentralManagerOptionRestoreIdentifierKey: "dev.12x.bluetoothManagerRestore"
         ]
         
-        print("Creating Bluetooth managers")
-        scanningMessage = "Initializing Bluetooth..."
+        print("Creating Bluetooth managers with dedicated queue")
+        DispatchQueue.main.async { [weak self] in
+            self?.scanningMessage = "Initializing Bluetooth..."
+        }
         
-        // Create the managers
-        centralManager = CBCentralManager(delegate: self, queue: nil, options: centralOptions)
-        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        // Create the managers with our dedicated queue
+        centralManager = CBCentralManager(delegate: self, queue: bluetoothQueue, options: centralOptions)
+        peripheralManager = CBPeripheralManager(delegate: self, queue: bluetoothQueue)
         
         print("BluetoothManager initialization complete")
-        
-        // Add a delay before starting operations to ensure permissions are requested
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            if self.centralManager.state == .poweredOn {
-                print("✅ Bluetooth powered on after delay, starting operations")
-                self.startScanning()
-                self.startAdvertising()
-            } else {
-                let stateDesc: String
-                switch self.centralManager.state {
-                case .poweredOff: stateDesc = "poweredOff - Turn on Bluetooth in Control Center"
-                case .unauthorized: stateDesc = "unauthorized - Permission denied in Settings"
-                case .unsupported: stateDesc = "unsupported - Device doesn't support Bluetooth"
-                case .resetting: stateDesc = "resetting - Bluetooth is restarting"
-                case .unknown: stateDesc = "unknown - Bluetooth state undetermined"
-                default: stateDesc = "other - state: \(self.centralManager.state.rawValue)"
-                }
-                
-                print("❌ Bluetooth not ready after delay: \(stateDesc)")
-                self.scanningMessage = "Bluetooth not ready: \(stateDesc)"
-            }
-        }
     }
     
     // MARK: - Central Methods
@@ -91,19 +137,34 @@ class BluetoothManager: NSObject, ObservableObject {
             // Bluetooth is on and ready
             break
         case .poweredOff:
-            scanningMessage = "Bluetooth is powered off. Please turn on Bluetooth."
+            DispatchQueue.main.async { [weak self] in
+                self?.scanningMessage = "Bluetooth is powered off. Please turn on Bluetooth."
+            }
             return
         case .unauthorized:
-            scanningMessage = "Bluetooth permission denied. Please enable in Settings."
-            // Display info about the required permission
+            DispatchQueue.main.async { [weak self] in
+                self?.scanningMessage = "Bluetooth permission denied. Please enable in Settings."
+            }
             print("IMPORTANT: Bluetooth permission is required. Add NSBluetoothAlwaysUsageDescription to Info.plist")
             return
         case .unsupported:
-            scanningMessage = "Bluetooth is not supported on this device"
+            DispatchQueue.main.async { [weak self] in
+                self?.scanningMessage = "Bluetooth is not supported on this device"
+            }
             return
         default:
-            scanningMessage = "Bluetooth is not ready. Please wait..."
+            DispatchQueue.main.async { [weak self] in
+                self?.scanningMessage = "Bluetooth is not ready. Please wait..."
+            }
             return
+        }
+        
+        // Update UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.nearbyDevices.removeAll()
+            self.isScanning = true
+            self.scanningMessage = "Scanning for devices..."
         }
         
         // Start scanning for devices with our service UUID
@@ -111,15 +172,18 @@ class BluetoothManager: NSObject, ObservableObject {
             CBCentralManagerScanOptionAllowDuplicatesKey: false
         ])
         
-        isScanning = true
-        scanningMessage = "Scanning for devices..."
         print("Started scanning for devices with UUID: \(serviceUUID.uuidString)")
     }
     
     func stopScanning() {
         centralManager.stopScan()
-        isScanning = false
-        scanningMessage = "Scanning stopped"
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isScanning = false
+            self.scanningMessage = "Scanning stopped"
+        }
+        
         print("Stopped scanning for devices")
     }
     
@@ -147,13 +211,24 @@ class BluetoothManager: NSObject, ObservableObject {
             CBAdvertisementDataLocalNameKey: "12x App \(UIDevice.current.name)"
         ])
         
-        isAdvertising = true
+        // Update UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isAdvertising = true
+        }
+        
         print("Started advertising as: 12x App \(UIDevice.current.name)")
     }
     
     func stopAdvertising() {
         peripheralManager.stopAdvertising()
-        isAdvertising = false
+        
+        // Update UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isAdvertising = false
+        }
+        
         print("Stopped advertising")
     }
 }
@@ -167,35 +242,45 @@ extension BluetoothManager: CBCentralManagerDelegate {
         // Retrieve any peripherals that were connected
         if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
             print("Restored \(peripherals.count) peripherals")
-            for peripheral in peripherals {
-                if !nearbyDevices.contains(where: { $0.identifier == peripheral.identifier }) {
-                    nearbyDevices.append(peripheral)
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
+                for peripheral in peripherals {
+                    if !self.nearbyDevices.contains(where: { $0.identifier == peripheral.identifier }) {
+                        self.nearbyDevices.append(peripheral)
+                    }
                 }
             }
         }
     }
     
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        switch central.state {
-        case .poweredOn:
-            print("Central manager powered on")
-            startScanning()
-            startAdvertising()
-        case .poweredOff:
-            print("Central manager powered off")
-            scanningMessage = "Bluetooth is powered off"
-        case .resetting:
-            print("Central manager resetting")
-        case .unauthorized:
-            print("Central manager unauthorized")
-            scanningMessage = "Bluetooth permission denied"
-        case .unsupported:
-            print("Central manager unsupported")
-            scanningMessage = "Bluetooth not supported"
-        case .unknown:
-            print("Central manager unknown state")
-        @unknown default:
-            print("Central manager unknown default")
+        // This runs on the bluetoothQueue, update UI properties on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            switch central.state {
+            case .poweredOn:
+                print("Central manager powered on")
+                self.startScanning()
+                self.startAdvertising()
+            case .poweredOff:
+                print("Central manager powered off")
+                self.scanningMessage = "Bluetooth is powered off"
+            case .resetting:
+                print("Central manager resetting")
+            case .unauthorized:
+                print("Central manager unauthorized")
+                self.scanningMessage = "Bluetooth permission denied"
+            case .unsupported:
+                print("Central manager unsupported")
+                self.scanningMessage = "Bluetooth not supported"
+            case .unknown:
+                print("Central manager unknown state")
+            @unknown default:
+                print("Central manager unknown default")
+            }
         }
     }
     
@@ -208,10 +293,18 @@ extension BluetoothManager: CBCentralManagerDelegate {
             return
         }
         
-        // See if we already found this device
-        if !nearbyDevices.contains(where: { $0.identifier == peripheral.identifier }) {
-            print("Discovered device: \(deviceName) (RSSI: \(RSSI))")
-            nearbyDevices.append(peripheral)
+        // Save to our device store (thread-safe operation)
+        deviceStore.addDevice(identifier: peripheral.identifier.uuidString, name: deviceName)
+        
+        // Update UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // See if we already found this device
+            if !self.nearbyDevices.contains(where: { $0.identifier == peripheral.identifier }) {
+                print("Discovered device: \(deviceName) (RSSI: \(RSSI))")
+                self.nearbyDevices.append(peripheral)
+            }
         }
     }
     
@@ -220,8 +313,13 @@ extension BluetoothManager: CBCentralManagerDelegate {
         peripheral.delegate = self
         peripheral.discoverServices([serviceUUID])
         
-        if !connectedPeripherals.contains(where: { $0.identifier == peripheral.identifier }) {
-            connectedPeripherals.append(peripheral)
+        // Update UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            if !self.connectedPeripherals.contains(where: { $0.identifier == peripheral.identifier }) {
+                self.connectedPeripherals.append(peripheral)
+            }
         }
     }
     
@@ -231,7 +329,12 @@ extension BluetoothManager: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         print("Disconnected from device: \(peripheral.name ?? peripheral.identifier.uuidString)")
-        connectedPeripherals.removeAll(where: { $0.identifier == peripheral.identifier })
+        
+        // Update UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.connectedPeripherals.removeAll(where: { $0.identifier == peripheral.identifier })
+        }
     }
 }
 
@@ -254,22 +357,27 @@ extension BluetoothManager: CBPeripheralDelegate {
 // MARK: - CBPeripheralManagerDelegate
 extension BluetoothManager: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
-        switch peripheral.state {
-        case .poweredOn:
-            print("Peripheral manager powered on")
-            startAdvertising()
-        case .poweredOff:
-            print("Peripheral manager powered off")
-        case .resetting:
-            print("Peripheral manager resetting")
-        case .unauthorized:
-            print("Peripheral manager unauthorized")
-        case .unsupported:
-            print("Peripheral manager unsupported")
-        case .unknown:
-            print("Peripheral manager unknown state")
-        @unknown default:
-            print("Peripheral manager unknown default")
+        // This runs on the bluetoothQueue, update UI properties on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            switch peripheral.state {
+            case .poweredOn:
+                print("Peripheral manager powered on")
+                self.startAdvertising()
+            case .poweredOff:
+                print("Peripheral manager powered off")
+            case .resetting:
+                print("Peripheral manager resetting")
+            case .unauthorized:
+                print("Peripheral manager unauthorized")
+            case .unsupported:
+                print("Peripheral manager unsupported")
+            case .unknown:
+                print("Peripheral manager unknown state")
+            @unknown default:
+                print("Peripheral manager unknown default")
+            }
         }
     }
     
@@ -282,10 +390,17 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     }
     
     func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
-        if let error = error {
-            print("Error starting advertising: \(error.localizedDescription)")
-        } else {
-            print("Advertising started successfully")
+        // Update UI on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("Error starting advertising: \(error.localizedDescription)")
+                self.isAdvertising = false
+            } else {
+                print("Advertising started successfully")
+                self.isAdvertising = true
+            }
         }
     }
 }
@@ -376,6 +491,12 @@ struct OnboardingView: View {
     @State private var emojiIndex = 0
     @State private var debugText = "Initializing..."
     @State private var showDevicesList = false
+    @State private var runTime: Int = 0
+    
+    // Track active timers to avoid duplicates
+    @State private var progressTimer: Timer? = nil
+    @State private var emojiTimer: Timer? = nil
+    @State private var debugTimer: Timer? = nil
     
     let emojis = ["📱", "🔄", "✨", "🚀", "🔍", "📡"]
     
@@ -474,15 +595,15 @@ struct OnboardingView: View {
                 print("ONBOARDING VIEW APPEARED")
                 debugText = "View appeared at \(formattedTime(Date()))"
                 
-                startProgressAnimation()
-                startEmojiAnimation()
-                startDebugUpdates()
+                // Only start animations and timers if they're not already running
+                startAnimationsAndTimers()
                 
-                // Start Bluetooth scanning and advertising
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    bluetoothManager.startScanning()
-                    bluetoothManager.startAdvertising()
-                }
+                // We don't need to manually call startScanning and startAdvertising here
+                // because the BluetoothManager already does this in centralManagerDidUpdateState
+            }
+            .onDisappear {
+                // Clean up timers when view disappears
+                stopTimers()
             }
         }
     }
@@ -493,9 +614,35 @@ struct OnboardingView: View {
         return formatter.string(from: date)
     }
     
+    private func startAnimationsAndTimers() {
+        // Only start timers if they're not already running
+        if progressTimer == nil {
+            startProgressAnimation()
+        }
+        
+        if emojiTimer == nil {
+            startEmojiAnimation()
+        }
+        
+        if debugTimer == nil {
+            startDebugUpdates()
+        }
+    }
+    
+    private func stopTimers() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+        
+        emojiTimer?.invalidate()
+        emojiTimer = nil
+        
+        debugTimer?.invalidate()
+        debugTimer = nil
+    }
+    
     func startProgressAnimation() {
         // Loop the progress animation indefinitely
-        Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
             withAnimation {
                 if progressValue >= 1.0 {
                     progressValue = 0.0
@@ -508,7 +655,7 @@ struct OnboardingView: View {
     
     func startEmojiAnimation() {
         // Cycle through emojis
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+        emojiTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
             withAnimation {
                 emojiIndex = (emojiIndex + 1) % emojis.count
             }
@@ -517,10 +664,9 @@ struct OnboardingView: View {
     
     func startDebugUpdates() {
         // Update debug text periodically to show app is running
-        var count = 0
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { timer in
-            count += 1
-            let runTime = Int(timer.timeInterval * Double(count))
+        runTime = 0
+        debugTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [self] timer in
+            runTime += 5
             debugText = "Running for \(runTime)s (at \(formattedTime(Date())))"
             print("App running for \(runTime) seconds")
         }
