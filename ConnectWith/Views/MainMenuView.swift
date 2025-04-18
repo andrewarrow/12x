@@ -64,7 +64,7 @@ struct OnboardingView: View {
                 
                 startProgressAnimation()
                 startEmojiAnimation()
-                startDebugUpdates()
+                
             }
         }
     }
@@ -81,7 +81,6 @@ struct OnboardingView: View {
             withAnimation {
                 if progressValue >= 1.0 {
                     progressValue = 0.0
-                    print("Progress reset at \(formattedTime(Date()))")
                 } else {
                     progressValue += 0.01
                 }
@@ -98,16 +97,7 @@ struct OnboardingView: View {
         }
     }
     
-    func startDebugUpdates() {
-        // Update debug text periodically to show app is running
-        var count = 0
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { timer in
-            count += 1
-            let runTime = Int(timer.timeInterval * Double(count))
-            debugText = "Running for \(runTime)s (at \(formattedTime(Date())))"
-            print("App running for \(runTime) seconds")
-        }
-    }
+
 }
 
 #Preview {
