@@ -1,0 +1,17 @@
+remove all the fake devices and only show real ones. When a real devices
+shows let the user select it to start a handshake.
+
+show the user a progress bar of the handshake and what's happening at each step.
+
+step 1. Sending HELLO
+step 2. No error sending HELLO
+step 3. Waiting for ACK...
+step 4. Receive ACK from [name of phone]
+step 5. Handshake Successful!
+
+You can add some delay between those steps displaying so the user has time to read
+them even if they are actually happening very fast. But if there is a real error
+let the user know.
+
+After they reach step 5 give them the option to stay and wait for other devices
+to be found or proceed with just the number that have handshaked successfully.
