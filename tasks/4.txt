@@ -1,0 +1,14 @@
+When the first real devices is found make the screen UI change
+dramatically so the user really knows something big just happened.
+
+Big color or font changes, they have moved on to STEP 2.
+
+The progress bar and emoji's go away.
+The help text about "have your family members also install the app" goes away.
+Show a list of the others devices by the name of the phone.
+There should be a checkbox UI component next to each device in the false position.
+The user can toggle them to true position and the click a button for "next".
+They can stay on this page as long as they want. If there is just one device
+they might want to wait for 2 or 3 devices to show up.
+
+Some small help text at bottom saying "Select family members..."
