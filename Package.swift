@@ -10,8 +10,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "ConnectWith",
+            path: "ConnectWith",
             resources: [
-                .process("Resources")
+                .process("Assets.xcassets")
             ]
         )
     ]
