@@ -2,6 +2,78 @@ import SwiftUI
 import Foundation
 import CoreBluetooth
 import UIKit
+import Combine
+
+// MARK: - Calendar Event Models
+
+// Model for calendar events - one event per month
+class CalendarEventStore: ObservableObject {
+    static let shared = CalendarEventStore()
+    
+    // Published events array
+    @Published var events: [CalendarEvent] = []
+    
+    init() {
+        // Initialize with empty events for each month
+        for monthIndex in 1...12 {
+            let monthName = Calendar.current.monthSymbols[monthIndex - 1]
+            events.append(CalendarEvent(month: monthIndex, monthName: monthName))
+        }
+    }
+    
+    // Get event for a specific month
+    func getEvent(for month: Int) -> CalendarEvent {
+        return events[month - 1]
+    }
+    
+    // Update an event
+    func updateEvent(month: Int, title: String, location: String, day: Int) {
+        events[month - 1].title = title
+        events[month - 1].location = location
+        events[month - 1].day = day
+        events[month - 1].isScheduled = true
+        objectWillChange.send()
+    }
+}
+
+// Model for a single calendar event
+struct CalendarEvent: Identifiable {
+    var id: Int { month }
+    let month: Int
+    let monthName: String
+    var title: String = ""
+    var location: String = ""
+    var day: Int = 1
+    var isScheduled: Bool = false
+    
+    // Get the card colors for each month
+    var cardColor: (Color, Color) {
+        let colors: [(Color, Color)] = [
+            (.blue, .cyan),              // January
+            (.pink, .purple),            // February
+            (.green, .mint),             // March
+            (.yellow, .orange),          // April
+            (.purple, .indigo),          // May
+            (.red, .pink),               // June
+            (.indigo, .blue),            // July
+            (.orange, .yellow),          // August
+            (.mint, .green),             // September
+            (.cyan, .teal),              // October
+            (.brown, .orange),           // November
+            (.pink, .red)                // December
+        ]
+        return colors[month - 1]
+    }
+    
+    // Gets a gradient for the card
+    var gradient: LinearGradient {
+        LinearGradient(
+            gradient: Gradient(colors: [cardColor.0, cardColor.1]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
 
 // Next View for showing selected devices and confirming completion
 struct NextView: View {
@@ -123,7 +195,7 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
-            // Calendar tab (placeholder)
+            // Calendar tab 
             CalendarView()
                 .tabItem {
                     Label("Calendar", systemImage: "calendar")
@@ -314,8 +386,12 @@ struct SavedDeviceRow: View {
     }
 }
 
-// Calendar View (Placeholder)
+// Calendar View with monthly event cards
 struct CalendarView: View {
+    @ObservedObject private var eventStore = CalendarEventStore.shared
+    @State private var selectedMonth: Int? = nil
+    @State private var isShowingEventForm = false
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -327,26 +403,188 @@ struct CalendarView: View {
                 )
                 .ignoresSafeArea()
                 
-                VStack {
-                    Image(systemName: "calendar")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 100, height: 100)
-                        .foregroundColor(.blue.opacity(0.7))
-                        .padding()
-                    
-                    Text("Family Calendar")
-                        .font(.title)
-                        .fontWeight(.bold)
-                    
-                    Text("Coming Soon")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding()
+                // ScrollView containing the month cards
+                ScrollView {
+                    VStack(spacing: 16) {
+                        Text("Family Events")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .padding(.top, 20)
+                        
+                        Text("Tap a month to add or edit your family event")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.bottom, 10)
+                        
+                        // Month cards - one card per month
+                        ForEach(eventStore.events) { event in
+                            MonthCard(event: event)
+                                .onTapGesture {
+                                    selectedMonth = event.month
+                                    isShowingEventForm = true
+                                }
+                        }
+                        
+                        Spacer(minLength: 30)
+                    }
+                    .padding(.horizontal)
                 }
             }
             .navigationTitle("Calendar")
+            .sheet(isPresented: $isShowingEventForm, onDismiss: {
+                selectedMonth = nil
+            }) {
+                if let month = selectedMonth {
+                    EventFormView(month: month)
+                }
+            }
         }
+    }
+}
+
+// Card view for a single month
+struct MonthCard: View {
+    let event: CalendarEvent
+    
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // Card background with gradient
+            event.gradient
+                .cornerRadius(16)
+                .shadow(radius: 4)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                // Month name
+                HStack {
+                    Text(event.monthName)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    if event.isScheduled {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.white)
+                            .font(.title2)
+                    }
+                }
+                .padding(.bottom, 5)
+                
+                // If there's an event scheduled, show the details
+                if event.isScheduled {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(event.title)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        HStack {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundColor(.white.opacity(0.9))
+                            Text(event.location)
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundColor(.white.opacity(0.9))
+                            Text("Day \(event.day)")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    }
+                } else {
+                    // If no event, show "Add event" prompt
+                    Text("Tap to add event")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            }
+            .padding()
+        }
+        .frame(height: 150)
+    }
+}
+
+// Form for adding/editing an event
+struct EventFormView: View {
+    let month: Int
+    @ObservedObject private var eventStore = CalendarEventStore.shared
+    @Environment(\.presentationMode) var presentationMode
+    
+    // Get the current event for this month
+    private var currentEvent: CalendarEvent {
+        eventStore.getEvent(for: month)
+    }
+    
+    // Form fields
+    @State private var title: String = ""
+    @State private var location: String = ""
+    @State private var day: Int = 1
+    
+    // Maximum day for the selected month
+    private var maxDay: Int {
+        let dateComponents = DateComponents(year: Calendar.current.component(.year, from: Date()), month: month)
+        let date = Calendar.current.date(from: dateComponents)!
+        return Calendar.current.range(of: .day, in: .month, for: date)!.count
+    }
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Event Details")) {
+                    TextField("Event Title", text: $title)
+                    TextField("Location", text: $location)
+                    
+                    Picker("Day", selection: $day) {
+                        ForEach(1...maxDay, id: \.self) { day in
+                            Text("\(day)").tag(day)
+                        }
+                    }
+                    .pickerStyle(WheelPickerStyle())
+                }
+                
+                Section {
+                    Button(action: saveEvent) {
+                        Text("Save Event")
+                            .frame(maxWidth: .infinity)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [.blue, .purple]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(10)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(title.isEmpty || location.isEmpty)
+                }
+            }
+            .navigationTitle("\(currentEvent.monthName) Event")
+            .onAppear {
+                // Initialize form with existing values if available
+                if currentEvent.isScheduled {
+                    title = currentEvent.title
+                    location = currentEvent.location
+                    day = currentEvent.day
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func saveEvent() {
+        eventStore.updateEvent(month: month, title: title, location: location, day: day)
+        presentationMode.wrappedValue.dismiss()
     }
 }
 
