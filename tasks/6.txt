@@ -1,0 +1,16 @@
+After the user presses next from the end of task 5 they should have 1 or more devices checked.
+We need to store those device names and ids in a local database.
+
+Also time for another dramatic change with colors and font. They are entering 
+the MAIN AREA of the app.
+
+There are should 3 tabs: Family, Calendar, Settings
+
+Start on the Family tab and list all the devices from the local database.
+For each device in the list there should be a status of either "new",
+"connected", or "error". All devices start as "new" and there should be an
+option to try and connect to each. When that option is selected attempt
+to make a bluetooth connection and handshake a simple "HELLO", "HI" back
+and forth message to prove its working. If it works change status to "connected" and
+if not "error".
+
