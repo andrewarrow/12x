@@ -639,8 +639,11 @@ struct EventFormView: View {
     }
 }
 
-// Settings View (Placeholder)
+// Settings View with sample event generator
 struct SettingsView: View {
+    @ObservedObject private var eventStore = CalendarEventStore.shared
+    @State private var showAlert = false
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -681,6 +684,23 @@ struct SettingsView: View {
                         }
                     }
                     
+                    Section(header: Text("Calendar")) {
+                        Button(action: populateSampleEvents) {
+                            HStack {
+                                Image(systemName: "calendar.badge.plus")
+                                    .foregroundColor(.blue)
+                                Text("Add Sample Events")
+                            }
+                        }
+                        .alert(isPresented: $showAlert) {
+                            Alert(
+                                title: Text("Sample Events Added"),
+                                message: Text("Sample events have been added to all 12 months of your calendar."),
+                                dismissButton: .default(Text("OK"))
+                            )
+                        }
+                    }
+                    
                     Section(header: Text("About")) {
                         HStack {
                             Image(systemName: "info.circle.fill")
@@ -699,6 +719,38 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+    
+    private func populateSampleEvents() {
+        // Sample event data for each month
+        let sampleEvents: [(title: String, location: String, day: Int)] = [
+            ("Winter Festival", "Town Square", 15),            // January
+            ("Valentine's Dinner", "Italian Restaurant", 14),  // February
+            ("Spring Break Trip", "Beach Resort", 20),         // March
+            ("Family Picnic", "Central Park", 12),             // April
+            ("Mother's Day Brunch", "Mom's Favorite Cafe", 8), // May
+            ("Summer Camp Starts", "Camp Wilderness", 24),     // June
+            ("Independence Fireworks", "Lakeside", 4),         // July
+            ("Family Reunion", "Grandma's House", 18),         // August
+            ("Back to School", "Shopping Mall", 2),            // September
+            ("Halloween Party", "Community Center", 31),       // October
+            ("Thanksgiving Dinner", "Home", 25),               // November
+            ("Holiday Celebration", "Mountain Cabin", 24)      // December
+        ]
+        
+        // Populate each month with a sample event
+        for month in 1...12 {
+            let event = sampleEvents[month - 1]
+            eventStore.updateEvent(
+                month: month,
+                title: event.title,
+                location: event.location,
+                day: event.day
+            )
+        }
+        
+        // Show confirmation alert
+        showAlert = true
     }
 }
 
