@@ -1,0 +1,8 @@
+Right now the app start in onboarding mode correctly for how a brand new user
+should enter. But once a user reaches the MAIN section of the app with
+the three tabs, record something to disk so that next time the app starts,
+the user skips onboarding and goes directly to the main section.
+
+In the upper right corner of the main screen is a refresh button that 
+currently doesn't do anything. Make it scan for new devices and
+add them to the list with status "new" if new but remember to de-dup.
