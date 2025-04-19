@@ -1,7 +1,8 @@
 import Foundation
 import CoreBluetooth
+import SwiftUI
 
-class DeviceStore {
+class DeviceStore: ObservableObject {
     static let shared = DeviceStore()
     
     private init() {}
@@ -9,6 +10,8 @@ class DeviceStore {
     // In-memory store for devices
     private var devices: [String: BluetoothDeviceInfo] = [:]
     private let queue = DispatchQueue(label: "com.12x.DeviceStoreQueue", attributes: .concurrent)
+    
+    @Published private var deviceListVersion = 0
     
     struct BluetoothDeviceInfo {
         let identifier: String
@@ -51,6 +54,12 @@ class DeviceStore {
             for (id, dev) in self.devices {
                 print("DEBUG: - ID: \(id.prefix(8))... Name: \(dev.displayName), Signal: \(dev.signalStrength)")
             }
+            
+            // Notify observers that the device list has changed
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.deviceListVersion += 1
+            }
         }
     }
     
@@ -63,6 +72,12 @@ class DeviceStore {
                 device.rssi = rssi
                 device.lastSeen = Date()
                 self.devices[identifier] = device
+                
+                // Notify observers that the device list has changed
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.deviceListVersion += 1
+                }
             } else {
                 // If device doesn't exist, add it
                 self.addDevice(identifier: identifier, name: name, rssi: rssi)

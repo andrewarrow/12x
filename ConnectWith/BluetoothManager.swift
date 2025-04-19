@@ -200,20 +200,17 @@ extension BluetoothManager: CBCentralManagerDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            // See if we already found this device
+            // Check if we already have this peripheral in the array
             if !self.nearbyDevices.contains(where: { $0.identifier == peripheral.identifier }) {
                 print("Discovered device: \(deviceName) (\(peripheral.identifier)) with RSSI: \(RSSI)")
                 self.nearbyDevices.append(peripheral)
-                
-                // Save to our device store with the enhanced name
-                print("DEBUG: Adding device to store with identifier: \(peripheral.identifier.uuidString)")
-                print("DEBUG: Adding device to store with name: \(deviceName)")
-                print("DEBUG: Adding device to store with RSSI: \(RSSI.intValue)")
-                self.deviceStore.addDevice(identifier: peripheral.identifier.uuidString, name: deviceName, rssi: RSSI.intValue)
-            } else if let index = self.nearbyDevices.firstIndex(where: { $0.identifier == peripheral.identifier }) {
-                // Update the RSSI for existing device
-                self.deviceStore.updateDevice(identifier: peripheral.identifier.uuidString, name: deviceName, rssi: RSSI.intValue)
             }
+            
+            // Always update device in the store (which handles duplicates by ID)
+            print("DEBUG: Updating device store with identifier: \(peripheral.identifier.uuidString)")
+            print("DEBUG: Adding/updating device with name: \(deviceName)")
+            print("DEBUG: Adding/updating device with RSSI: \(RSSI.intValue)")
+            self.deviceStore.updateDevice(identifier: peripheral.identifier.uuidString, name: deviceName, rssi: RSSI.intValue)
         }
     }
     
