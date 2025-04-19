@@ -1,0 +1,22 @@
+It's time to store the calendar data to disk. When the user quits the app
+and re-enters all their calendar data should still be there.
+
+Also let's start on the feature to sync your calendar data to a family
+member over bluetooth. In the Family tab add a new option for "sync"
+on each family member only for "connected" ones.
+
+So "new" or "error" status one will not have this option yet.
+
+When you select sync open a modal showing detailed information
+about the process. Show stuff like how the bluetooth communication
+is going in terms of bytes in or bytes out. Do not edit the receiving
+user's calendar. Instead just log all the incoming data. Then provide 
+the user with a new tab called "Updates" and has rows like "Bob would like to change the date of the Ski Trip in May to the 19th." And give the user the option to accept or reject.
+
+When the Updates tab is select before it a sync it's empty.
+
+The sync should be two ways, so you are only the receiving device the 1st time,
+then you are the sending device or vice versa. But phone1 gets updates from phone2
+and phone2 gets update from phone1 as well.
+
+Use json to send the data and log everything to xcode debug console.
