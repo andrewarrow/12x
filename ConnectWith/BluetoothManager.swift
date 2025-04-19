@@ -96,10 +96,32 @@ class BluetoothManager: NSObject, ObservableObject {
         // Add the service to the peripheral manager
         peripheralManager.add(service)
         
-        // Start advertising
+        // Get the device name - using better personalization
+        var deviceName = UIDevice.current.name
+        print("DEBUG: UIDevice.current.name = \(deviceName)")
+        
+        // Try to get the personalized name from UserDefaults
+        if let customName = UserDefaults.standard.string(forKey: "DeviceCustomName") {
+            deviceName = customName
+            print("DEBUG: Found custom name in UserDefaults: \(customName)")
+        } else {
+            // Use host name which often includes personalized name ("Bob's-iPhone.local" format)
+            let hostName = ProcessInfo.processInfo.hostName
+            print("DEBUG: ProcessInfo.hostName = \(hostName)")
+            
+            let cleanedName = hostName.replacingOccurrences(of: ".local", with: "")
+                                      .replacingOccurrences(of: "-", with: " ")
+            print("DEBUG: Cleaned host name = \(cleanedName)")
+            deviceName = cleanedName
+        }
+        
+        print("DEBUG: Final device name for advertising = \(deviceName)")
+        
+        // Start advertising with a format that will be easy to parse on other devices
+        // We include just the device name to make identification easier
         peripheralManager.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
-            CBAdvertisementDataLocalNameKey: "12x App \(UIDevice.current.name)"
+            CBAdvertisementDataLocalNameKey: deviceName
         ])
         
         // Update UI values on main thread
@@ -108,7 +130,7 @@ class BluetoothManager: NSObject, ObservableObject {
             self.isAdvertising = true
         }
         
-        print("Started advertising")
+        print("Started advertising as: \(deviceName)")
     }
     
     func stopAdvertising() {
@@ -157,12 +179,22 @@ extension BluetoothManager: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         // Check if the device has a name
-        let deviceName = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown Device"
+        let fullDeviceName = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown Device"
         
-        // Only add devices that have "12x App" in their name
-        guard deviceName.contains("12x App") else {
-            return
-        }
+        // Don't filter by name prefix anymore - accept all devices with our service UUID
+        // The service UUID is already used as the filter in scanForPeripherals
+        
+        // Extract the human-readable portion of the name (similar to AirDrop)
+        // For example, from "12x App Bob's iPhone" extract "Bob"
+        let cleanedName = extractHumanName(from: fullDeviceName)
+        print("DEBUG: Discovered device with full name = \(fullDeviceName)")
+        print("DEBUG: Extracted human name = \(cleanedName)")
+        
+        // Format the device name to include RSSI signal strength for better identification
+        // RSSI ranges typically from -30 (very close) to -100 (far away)
+        let signalStrength = formatSignalStrength(RSSI.intValue)
+        let deviceName = "\(cleanedName) \(signalStrength)"
+        print("DEBUG: Final formatted device name = \(deviceName)")
         
         // Update collection on main thread since it affects UI
         DispatchQueue.main.async { [weak self] in
@@ -170,13 +202,77 @@ extension BluetoothManager: CBCentralManagerDelegate {
             
             // See if we already found this device
             if !self.nearbyDevices.contains(where: { $0.identifier == peripheral.identifier }) {
-                print("Discovered device: \(deviceName) (\(peripheral.identifier))")
+                print("Discovered device: \(deviceName) (\(peripheral.identifier)) with RSSI: \(RSSI)")
                 self.nearbyDevices.append(peripheral)
                 
-                // Save to our device store
-                self.deviceStore.addDevice(identifier: peripheral.identifier.uuidString, name: deviceName)
+                // Save to our device store with the enhanced name
+                print("DEBUG: Adding device to store with identifier: \(peripheral.identifier.uuidString)")
+                print("DEBUG: Adding device to store with name: \(deviceName)")
+                print("DEBUG: Adding device to store with RSSI: \(RSSI.intValue)")
+                self.deviceStore.addDevice(identifier: peripheral.identifier.uuidString, name: deviceName, rssi: RSSI.intValue)
+            } else if let index = self.nearbyDevices.firstIndex(where: { $0.identifier == peripheral.identifier }) {
+                // Update the RSSI for existing device
+                self.deviceStore.updateDevice(identifier: peripheral.identifier.uuidString, name: deviceName, rssi: RSSI.intValue)
             }
         }
+    }
+    
+    // Extracts human name from device name, similar to AirDrop
+    private func extractHumanName(from deviceName: String) -> String {
+        // Don't remove any prefix, just use the device name directly
+        var name = deviceName
+        print("DEBUG: extractHumanName from original: \(name)")
+        
+        // Common patterns to extract human names
+        let patterns = [
+            "^(.*?)'s iPhone", // Bob's iPhone
+            "^(.*?)'s iPad",   // Bob's iPad
+            "^(.*?)'s Mac",    // Bob's Mac
+            "^(.*?)'s .*",     // Bob's Device
+            "^(.*?) iPhone",   // Bob iPhone
+            "^(.*?) iPad",     // Bob iPad
+            "iPhone \\((.*)\\)",  // iPhone (Bob)
+        ]
+        
+        // Try to match against known patterns
+        for pattern in patterns {
+            print("DEBUG: Trying pattern: \(pattern)")
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+               let match = regex.firstMatch(in: name, options: [], range: NSRange(name.startIndex..., in: name)) {
+                
+                print("DEBUG: Pattern matched: \(pattern)")
+                // If the pattern has a capture group, extract it
+                if match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: name) {
+                    let extractedName = String(name[range])
+                    print("DEBUG: Extracted name from pattern: \(extractedName)")
+                    if !extractedName.isEmpty {
+                        return extractedName
+                    }
+                }
+            }
+        }
+        print("DEBUG: No patterns matched")
+        
+        // Get the device name directly from UIDevice for this device, or try to extract owner name
+        if name == "iPhone" || name == "iPad" || name == "Mac" {
+            // For generic device names like "iPhone", use the full device name with a uuid
+            let result = "\(name) \(abs(deviceName.hashValue % 1000))"
+            print("DEBUG: Generic device, returning with hash: \(result)")
+            return result
+        } else if name.lowercased().contains("iphone") || name.lowercased().contains("ipad") || name.lowercased().contains("mac") {
+            // For device names that include model but no person name, add identifier
+            let result = "User \(abs(deviceName.hashValue % 100))'s \(name)"
+            print("DEBUG: Model name without person name, returning: \(result)")
+            return result
+        }
+        
+        print("DEBUG: Returning unmodified name: \(name)")
+        return name
+    }
+    
+    // Format signal strength as just the RSSI value
+    private func formatSignalStrength(_ rssi: Int) -> String {
+        return "(📶 \(rssi) dBm)"
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {

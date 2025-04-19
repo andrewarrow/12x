@@ -3,64 +3,86 @@ import Foundation
 import CoreBluetooth
 import UIKit
 
-// Define DeviceStore here for simplicity
-class DeviceStore {
-    static let shared = DeviceStore()
-    
-    private init() {}
+// We need to redefine the DeviceStore and BluetoothDeviceInfo type
+// to make the UI components work properly
+class DeviceStoreReference {
+    // This is a reference to the actual DeviceStore
+    static let shared = DeviceStoreReference()
     
     // In-memory store for devices
     private var devices: [String: BluetoothDeviceInfo] = [:]
-    private let queue = DispatchQueue(label: "com.12x.DeviceStoreQueue", attributes: .concurrent)
+    
+    private init() {}
     
     struct BluetoothDeviceInfo {
         let identifier: String
         var name: String
-        var lastSeen: Date
+        var signalStrength: String
+        var displayName: String
+        var lastSeen: Date = Date()
     }
     
-    // Add or update a device
-    func addDevice(identifier: String, name: String) {
-        queue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            let device = BluetoothDeviceInfo(
-                identifier: identifier,
-                name: name,
-                lastSeen: Date()
-            )
-            self.devices[identifier] = device
-        }
-    }
-    
-    // Get all devices
-    func getAllDevices() -> [BluetoothDeviceInfo] {
-        var result: [BluetoothDeviceInfo] = []
-        queue.sync {
-            result = Array(devices.values)
-        }
-        return result
-    }
-    
-    // Get a specific device
+    // Method to get device info
     func getDevice(identifier: String) -> BluetoothDeviceInfo? {
-        var result: BluetoothDeviceInfo?
-        queue.sync {
-            result = devices[identifier]
+        // Check if we already have this device
+        if let device = devices[identifier] {
+            return device
         }
-        return result
+        
+        // If not, create a dummy device and store it
+        let shortId = identifier.prefix(8)
+        let displayName = "Device \(shortId)"
+        
+        let newDevice = BluetoothDeviceInfo(
+            identifier: identifier,
+            name: displayName,
+            signalStrength: "Good",
+            displayName: displayName
+        )
+        
+        devices[identifier] = newDevice
+        return newDevice
+    }
+    
+    // Add device method
+    func addDevice(identifier: String, name: String, rssi: Int = -70) {
+        // Just use the raw RSSI value
+        let signalStrength = "\(rssi) dBm"
+        
+        // Extract display name from device name
+        var displayName = name
+        if let range = name.range(of: " (📶") {
+            displayName = String(name[..<range.lowerBound])
+        }
+        
+        // Create and store the device
+        let device = BluetoothDeviceInfo(
+            identifier: identifier,
+            name: name,
+            signalStrength: signalStrength,
+            displayName: displayName
+        )
+        
+        devices[identifier] = device
+    }
+    
+    // Update device method
+    func updateDevice(identifier: String, name: String, rssi: Int) {
+        // Same as addDevice, for API compatibility
+        addDevice(identifier: identifier, name: name, rssi: rssi)
     }
     
     // Update a device's last seen time
     func updateLastSeen(identifier: String) {
-        queue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            if var device = self.devices[identifier] {
-                device.lastSeen = Date()
-                self.devices[identifier] = device
-            }
+        if var device = devices[identifier] {
+            device.lastSeen = Date()
+            devices[identifier] = device
         }
     }
 }
+
+// Use a typealias to make it easier to reference
+typealias DeviceStore = DeviceStoreReference
 
 // Define BluetoothManager here since we can't easily reference it from another file
 // This implementation includes the thread fixes
@@ -206,9 +228,29 @@ class BluetoothManager: NSObject, ObservableObject {
         peripheralManager.add(service)
         
         // Start advertising
+        // Get the device name using the improved method
+        var deviceName = UIDevice.current.name
+        
+        // Try to get the personalized name from UserDefaults
+        if let customName = UserDefaults.standard.string(forKey: "DeviceCustomName") {
+            deviceName = customName
+            print("DEBUG: Found custom name in UserDefaults: \(customName)")
+        } else {
+            // Use host name which often includes personalized name ("Bob's-iPhone.local" format)
+            let hostName = ProcessInfo.processInfo.hostName
+            print("DEBUG: ProcessInfo.hostName = \(hostName)")
+            
+            let cleanedName = hostName.replacingOccurrences(of: ".local", with: "")
+                                      .replacingOccurrences(of: "-", with: " ")
+            print("DEBUG: Cleaned host name = \(cleanedName)")
+            deviceName = cleanedName
+        }
+        
+        print("DEBUG: MainMenuView advertising with name: \(deviceName)")
+        
         peripheralManager.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
-            CBAdvertisementDataLocalNameKey: "12x App \(UIDevice.current.name)"
+            CBAdvertisementDataLocalNameKey: deviceName
         ])
         
         // Update UI on main thread
@@ -217,7 +259,7 @@ class BluetoothManager: NSObject, ObservableObject {
             self.isAdvertising = true
         }
         
-        print("Started advertising as: 12x App \(UIDevice.current.name)")
+        print("Started advertising as: \(deviceName)")
     }
     
     func stopAdvertising() {
@@ -288,13 +330,13 @@ extension BluetoothManager: CBCentralManagerDelegate {
         // Check if the device has a name
         let deviceName = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown Device"
         
-        // Only add devices that have "12x App" in their name
-        guard deviceName.contains("12x App") else {
-            return
-        }
+        // Don't filter by name prefix - we're already filtering by service UUID
+        // Accept all devices that match our service UUID
         
         // Save to our device store (thread-safe operation)
-        deviceStore.addDevice(identifier: peripheral.identifier.uuidString, name: deviceName)
+        print("DEBUG: MainMenuView discovered device with name: \(deviceName)")
+        print("DEBUG: MainMenuView adding device to store with ID: \(peripheral.identifier.uuidString)")
+        deviceStore.addDevice(identifier: peripheral.identifier.uuidString, name: deviceName, rssi: RSSI.intValue)
         
         // Update UI on main thread
         DispatchQueue.main.async { [weak self] in
@@ -709,6 +751,7 @@ struct SelectDevicesView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @State private var selectedDevices: Set<UUID> = []
     @State private var showNextScreen = false
+    @State private var isScanningActive = false
     
     var body: some View {
         ZStack {
@@ -724,8 +767,12 @@ struct SelectDevicesView: View {
                 // Device list
                 List {
                     ForEach(bluetoothManager.nearbyDevices, id: \.identifier) { device in
+                        // Get more information from the device store
+                        let deviceInfo = DeviceStore.shared.getDevice(identifier: device.identifier.uuidString)
+                        
                         DeviceSelectionRow(
                             device: device,
+                            deviceInfo: deviceInfo,
                             isSelected: selectedDevices.contains(device.identifier),
                             toggleSelection: {
                                 if selectedDevices.contains(device.identifier) {
@@ -738,6 +785,24 @@ struct SelectDevicesView: View {
                     }
                 }
                 .listStyle(InsetGroupedListStyle())
+                
+                // Refresh button for rescanning
+                Button(action: {
+                    bluetoothManager.startScanning()
+                    isScanningActive = true
+                    // Auto-turn off scanning indicator after 10 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                        isScanningActive = false
+                    }
+                }) {
+                    Label(
+                        isScanningActive ? "Scanning..." : "Refresh Device List",
+                        systemImage: isScanningActive ? "antenna.radiowaves.left.and.right" : "arrow.clockwise"
+                    )
+                    .font(.footnote)
+                    .foregroundColor(.blue)
+                }
+                .padding(.top, 5)
                 
                 Text("Select family members' devices to connect with")
                     .font(.callout)
@@ -774,22 +839,100 @@ struct SelectDevicesView: View {
 
 struct DeviceSelectionRow: View {
     let device: CBPeripheral
+    let deviceInfo: DeviceStore.BluetoothDeviceInfo?
     let isSelected: Bool
     let toggleSelection: () -> Void
     
+    // We'll use different device icons based on the signal strength
+    private var deviceIcon: String {
+        guard let info = deviceInfo else { return "iphone.circle" }
+        
+        // Parse the RSSI value from the string
+        let rssiString = info.signalStrength.replacingOccurrences(of: " dBm", with: "")
+        if let rssi = Int(rssiString) {
+            if rssi >= -60 {
+                return "iphone.circle.fill"
+            } else if rssi >= -70 {
+                return "iphone.circle.fill"
+            } else if rssi >= -80 {
+                return "iphone.circle"
+            } else {
+                return "iphone"
+            }
+        }
+        return "iphone.circle"
+    }
+    
+    // Color also changes based on signal strength
+    private var iconColor: Color {
+        guard let info = deviceInfo else { return .gray }
+        
+        // Parse the RSSI value from the string
+        let rssiString = info.signalStrength.replacingOccurrences(of: " dBm", with: "")
+        if let rssi = Int(rssiString) {
+            if rssi >= -60 {
+                return .green
+            } else if rssi >= -70 {
+                return .blue
+            } else if rssi >= -80 {
+                return .orange
+            } else {
+                return .gray
+            }
+        }
+        return .gray
+    }
+    
     var body: some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text(device.name ?? "Unknown Device")
-                    .font(.headline)
-                
-                Text(device.identifier.uuidString)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            // Icon indicating device type with signal strength color
+            Image(systemName: deviceIcon)
+                .font(.title)
+                .foregroundColor(iconColor)
+                .frame(width: 40)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                if let info = deviceInfo {
+                    // Display the clean name
+                    Text(info.displayName)
+                        .font(.headline)
+                    
+                    // Show signal strength
+                    HStack(spacing: 4) {
+                        Text("Signal: \(info.signalStrength)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        // Signal bars based on RSSI value
+                        let rssiString = info.signalStrength.replacingOccurrences(of: " dBm", with: "")
+                        if let rssi = Int(rssiString) {
+                            if rssi >= -60 {
+                                Text("📶")
+                            } else if rssi >= -70 {
+                                Text("📶")
+                            } else if rssi >= -80 {
+                                Text("📶")
+                            } else {
+                                Text("📶").foregroundColor(.gray.opacity(0.5))
+                            }
+                        } else {
+                            Text("📶")
+                        }
+                    }
+                } else {
+                    // Fallback if no device info
+                    Text(device.name ?? "Unknown Device")
+                        .font(.headline)
+                    
+                    Text("Identifier: \(device.identifier.uuidString.prefix(8))...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Spacer()
             
+            // Checkbox
             Image(systemName: isSelected ? "checkmark.square.fill" : "square")
                 .font(.title2)
                 .foregroundColor(isSelected ? .green : .gray)
@@ -826,13 +969,38 @@ struct NextView: View {
                 .padding()
             
             List {
-                Section(header: Text("Selected Devices")) {
-                    ForEach(bluetoothManager.nearbyDevices.filter { selectedDevices.contains($0.identifier) }, id: \.identifier) { device in
+                Section(header: Text("Selected Family Members")) {
+                    // Create a computed filteredDevices array to simplify the ForEach
+                    let filteredDevices = bluetoothManager.nearbyDevices.filter { 
+                        selectedDevices.contains($0.identifier) 
+                    }
+                    
+                    ForEach(filteredDevices, id: \.identifier) { device in
+                        // Get the display name from device store
+                        let deviceInfo = DeviceStore.shared.getDevice(identifier: device.identifier.uuidString)
+                        let displayName = deviceInfo?.displayName ?? (device.name ?? "Unknown Device")
+                        
                         HStack {
-                            Image(systemName: "iphone.circle.fill")
+                            // Icon with signal strength color
+                            Image(systemName: "person.circle.fill")
                                 .foregroundColor(.green)
-                            Text(device.name ?? "Unknown Device")
+                                .font(.title2)
+                            
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(displayName)
+                                    .font(.headline)
+                                
+                                // Show signal strength if available
+                                if let info = deviceInfo {
+                                    HStack {
+                                        Text("Signal Quality: \(info.signalStrength)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
                 }
             }
@@ -840,9 +1008,24 @@ struct NextView: View {
             
             Spacer()
             
-            Text("Continue setting up your family connections")
-                .font(.callout)
-                .foregroundColor(.secondary)
+            Text("Your family network is ready to use")
+                .font(.headline)
+                .foregroundColor(.green)
+                .padding()
+            
+            Button(action: {
+                // Future functionality could go here
+            }) {
+                Text("Get Started")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .cornerRadius(10)
+                    .padding(.horizontal)
+            }
+            .padding(.bottom)
         }
         .padding()
         .navigationTitle("Setup Complete")
