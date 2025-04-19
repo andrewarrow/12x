@@ -358,14 +358,151 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
+            // Updates tab for sync changes
+            UpdatesView()
+                .tabItem {
+                    Label("Updates", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .tag(2)
+            
             // Settings tab (placeholder)
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(2)
+                .tag(3)
         }
         .accentColor(.blue)
+    }
+}
+
+// Updates View to display incoming calendar changes
+struct UpdatesView: View {
+    @State private var hasReceivedUpdates = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                // Background with same color scheme
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+                
+                if hasReceivedUpdates {
+                    // This is a placeholder that will be replaced in future tasks
+                    // with real update data from synced devices
+                    List {
+                        Section(header: Text("Pending Calendar Updates")) {
+                            UpdateItemRow(
+                                deviceName: "Bob's iPhone",
+                                eventTitle: "Ski Trip",
+                                description: "would like to change the date of the Ski Trip in May to the 19th.",
+                                timestamp: Date().addingTimeInterval(-300)
+                            )
+                            
+                            UpdateItemRow(
+                                deviceName: "Lisa's iPhone",
+                                eventTitle: "Family Reunion",
+                                description: "wants to update the location of Family Reunion in July to 'Grandma's House'.",
+                                timestamp: Date().addingTimeInterval(-1800)
+                            )
+                        }
+                    }
+                    .listStyle(InsetGroupedListStyle())
+                } else {
+                    // Empty state when no updates are available
+                    VStack(spacing: 20) {
+                        Image(systemName: "tray.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray.opacity(0.5))
+                        
+                        Text("No Updates Available")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        Text("When family members sync their calendars with you, pending changes will appear here.")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                        
+                        // This button is just for demo purposes - in a real implementation, 
+                        // updates would come from actual sync operations
+                        Button(action: {
+                            print("[SyncUI] Showing demo updates in Updates tab")
+                            hasReceivedUpdates = true
+                        }) {
+                            Text("Show Demo Updates")
+                                .padding()
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(8)
+                        }
+                        .padding(.top, 20)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Updates")
+        }
+    }
+}
+
+// Individual update item row
+struct UpdateItemRow: View {
+    let deviceName: String
+    let eventTitle: String
+    let description: String
+    let timestamp: Date
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(deviceName) \(description)")
+                        .font(.body)
+                    
+                    Text(timestamp, style: .relative)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            HStack(spacing: 10) {
+                Button(action: {
+                    print("[SyncUI] Update from \(deviceName) accepted for \(eventTitle)")
+                }) {
+                    Text("Accept")
+                        .font(.caption)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+                
+                Button(action: {
+                    print("[SyncUI] Update from \(deviceName) rejected for \(eventTitle)")
+                }) {
+                    Text("Reject")
+                        .font(.caption)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
 
@@ -497,6 +634,7 @@ struct SavedDeviceRow: View {
     let device: DeviceStore.SavedDeviceInfo
     @ObservedObject var bluetoothManager: BluetoothManager
     @State private var isConnecting = false
+    @State private var showingSyncModal = false
     
     var body: some View {
         HStack {
@@ -530,7 +668,7 @@ struct SavedDeviceRow: View {
             
             Spacer()
             
-            // Connect button
+            // Connect button or Sync button based on connection status
             if device.connectionStatus != .connected {
                 Button(action: {
                     connectToDevice()
@@ -550,12 +688,34 @@ struct SavedDeviceRow: View {
                 }
                 .disabled(isConnecting)
             } else {
-                Text("Connected")
-                    .font(.caption)
-                    .foregroundColor(.green)
+                // Sync button for connected devices
+                HStack(spacing: 8) {
+                    Text("Connected")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                    
+                    Button(action: {
+                        print("[SyncUI] Sync button tapped for device \(device.displayName) (\(device.identifier))")
+                        showingSyncModal = true
+                    }) {
+                        Text("Sync")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.purple)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                }
             }
         }
         .padding(.vertical, 8)
+        .sheet(isPresented: $showingSyncModal) {
+            SyncModalView(deviceInfo: device) {
+                print("[SyncUI] Sync modal dismissed for device \(device.displayName), reason: user cancelled")
+                showingSyncModal = false
+            }
+        }
     }
     
     // Helper computed properties
@@ -577,6 +737,7 @@ struct SavedDeviceRow: View {
     // Connect to the device
     private func connectToDevice() {
         isConnecting = true
+        print("[SyncUI] Device \(device.displayName) status changed to connecting")
         
         // Test connection with the device
         bluetoothManager.testConnection(with: device.identifier)
@@ -584,6 +745,7 @@ struct SavedDeviceRow: View {
         // Set a timeout to stop the connecting spinner after 5 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             isConnecting = false
+            print("[SyncUI] Device \(device.displayName) status updated after connection attempt")
         }
     }
 }
@@ -838,6 +1000,218 @@ struct EventFormView: View {
 }
 
 // Settings View with sample event generator
+// Sync Modal View
+struct SyncModalView: View {
+    let deviceInfo: DeviceStore.SavedDeviceInfo
+    let onDismiss: () -> Void
+    
+    @State private var syncProgress: Double = 0.0
+    @State private var statusText: String = "Preparing to sync..."
+    @State private var bytesTransferred: Int = 0
+    @State private var bytesTotal: Int = 0
+    @State private var isAnimating = false
+    @State private var syncLog: [String] = []
+    
+    // For simulating progress in this UI-only implementation
+    private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    // Header section
+                    VStack(spacing: 10) {
+                        Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.purple)
+                            .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                            .animation(
+                                isAnimating ? .linear(duration: 2).repeatForever(autoreverses: false) : .default,
+                                value: isAnimating
+                            )
+                        
+                        Text("Syncing with \(deviceInfo.displayName)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text(statusText)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.top)
+                    
+                    // Progress section
+                    VStack(spacing: 15) {
+                        ProgressView(value: syncProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .frame(height: 8)
+                        
+                        HStack {
+                            Text("\(Int(syncProgress * 100))%")
+                                .font(.headline)
+                                .foregroundColor(.purple)
+                            
+                            Spacer()
+                            
+                            Text("\(formatBytes(bytesTransferred)) / \(formatBytes(bytesTotal))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // Sync details section
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Sync Details")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(syncLog, id: \.self) { logEntry in
+                                    Text(logEntry)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                if syncLog.isEmpty {
+                                    Text("Waiting for sync to start...")
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                        .italic()
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(Color.black.opacity(0.05))
+                            .cornerRadius(8)
+                        }
+                        .frame(maxHeight: 200)
+                        .padding(.horizontal)
+                    }
+                    
+                    Spacer()
+                    
+                    // Cancel button
+                    Button(action: {
+                        print("[SyncUI] Sync cancelled by user for device \(deviceInfo.displayName)")
+                        onDismiss()
+                    }) {
+                        Text("Cancel")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.gray.opacity(0.2))
+                            .foregroundColor(.primary)
+                            .cornerRadius(10)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
+                }
+                .padding()
+            }
+            .navigationTitle("Calendar Sync")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        print("[SyncUI] Sync modal dismissed for device \(deviceInfo.displayName), reason: user tapped done")
+                        onDismiss()
+                    }
+                }
+            }
+            .onAppear {
+                startSyncSimulation()
+            }
+            .onReceive(timer) { _ in
+                updateSyncSimulation()
+            }
+            .onDisappear {
+                isAnimating = false
+            }
+        }
+    }
+    
+    // Helper function to format bytes
+    private func formatBytes(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+    
+    // Start sync simulation
+    private func startSyncSimulation() {
+        print("[SyncUI] Presenting sync modal for device \(deviceInfo.displayName)")
+        isAnimating = true
+        bytesTotal = Int.random(in: 50_000...200_000) // Random size between 50KB and 200KB
+        
+        // Initial log entry
+        addLogEntry("Initializing sync with \(deviceInfo.displayName)...")
+    }
+    
+    // Update sync simulation for UI demonstration
+    private func updateSyncSimulation() {
+        guard syncProgress < 1.0 else { return }
+        
+        // Update progress
+        let progressStep = Double.random(in: 0.01...0.05)
+        syncProgress = min(syncProgress + progressStep, 1.0)
+        
+        // Update bytes transferred based on progress
+        bytesTransferred = Int(Double(bytesTotal) * syncProgress)
+        
+        // Update status text based on progress
+        if syncProgress < 0.3 {
+            statusText = "Preparing calendar data..."
+            if Int.random(in: 1...4) == 1 {
+                addLogEntry("Collecting calendar events...")
+            }
+        } else if syncProgress < 0.6 {
+            statusText = "Transferring data..."
+            if Int.random(in: 1...3) == 1 {
+                let transferredBytes = Int.random(in: 1000...5000)
+                addLogEntry("Transferred \(formatBytes(transferredBytes)) of data")
+            }
+        } else if syncProgress < 0.9 {
+            statusText = "Finalizing sync..."
+            if Int.random(in: 1...4) == 1 {
+                addLogEntry("Verifying data integrity...")
+            }
+        } else {
+            statusText = "Sync complete!"
+            if syncLog.last != "Sync completed successfully!" {
+                addLogEntry("Sync completed successfully!")
+            }
+        }
+        
+        // Log current state
+        print("[SyncUI] Sync progress: \(Int(syncProgress * 100))%, bytes: \(bytesTransferred)/\(bytesTotal)")
+    }
+    
+    // Add a log entry with timestamp
+    private func addLogEntry(_ message: String) {
+        let timestamp = currentTimeString()
+        let logEntry = "[\(timestamp)] \(message)"
+        
+        print("[SyncUI] \(logEntry)")
+        syncLog.append(logEntry)
+    }
+    
+    // Get current time string for logs
+    private func currentTimeString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter.string(from: Date())
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject private var eventStore = CalendarStore.shared
     @State private var showAlert = false
