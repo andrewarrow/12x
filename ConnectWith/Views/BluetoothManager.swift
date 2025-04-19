@@ -130,6 +130,7 @@ class BluetoothManager: NSObject, ObservableObject {
         // Update UI on main thread
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            // Clear the nearbyDevices array when we start a new scan
             self.nearbyDevices.removeAll()
             self.isScanning = true
             self.scanningMessage = "Scanning for devices..."
@@ -423,7 +424,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         // Don't filter by name prefix - we're already filtering by service UUID
         // Accept all devices that match our service UUID
         
-        // Save to our device store (thread-safe operation)
+        // Save to our device store (thread-safe operation) - will update if device already exists
         print("DEBUG: MainMenuView discovered device with name: \(deviceName)")
         print("DEBUG: MainMenuView adding device to store with ID: \(peripheral.identifier.uuidString)")
         deviceStore.addDevice(identifier: peripheral.identifier.uuidString, name: deviceName, rssi: RSSI.intValue)
@@ -432,10 +433,14 @@ extension BluetoothManager: CBCentralManagerDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            // See if we already found this device
+            // See if we already found this device - if not, add it to nearbyDevices
             if !self.nearbyDevices.contains(where: { $0.identifier == peripheral.identifier }) {
                 print("Discovered device: \(deviceName) (RSSI: \(RSSI))")
                 self.nearbyDevices.append(peripheral)
+            } else {
+                // If we found it before, update the existing entry instead of adding a duplicate
+                print("Updated existing device: \(deviceName) (RSSI: \(RSSI))")
+                // No need to update nearbyDevices directly - we already have a reference to the CBPeripheral
             }
         }
     }

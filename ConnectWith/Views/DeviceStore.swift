@@ -86,15 +86,26 @@ class DeviceStore: ObservableObject {
         print("DEBUG: DeviceStore.addDevice called with id=\(identifier), name=\(name), rssi=\(rssi)")
         queue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            let device = BluetoothDeviceInfo(
-                identifier: identifier,
-                name: name,
-                rssi: rssi,
-                lastSeen: Date()
-            )
-            print("DEBUG: DeviceStore created BluetoothDeviceInfo with name=\(name)")
-            print("DEBUG: DeviceStore device displayName=\(device.displayName)")
-            self.devices[identifier] = device
+            
+            // Update existing device if it exists
+            if var existingDevice = self.devices[identifier] {
+                existingDevice.name = name
+                existingDevice.rssi = rssi
+                existingDevice.lastSeen = Date()
+                self.devices[identifier] = existingDevice
+                print("DEBUG: DeviceStore updated existing device: \(name)")
+            } else {
+                // Create new device if it doesn't exist
+                let device = BluetoothDeviceInfo(
+                    identifier: identifier,
+                    name: name,
+                    rssi: rssi,
+                    lastSeen: Date()
+                )
+                print("DEBUG: DeviceStore created new BluetoothDeviceInfo with name=\(name)")
+                print("DEBUG: DeviceStore device displayName=\(device.displayName)")
+                self.devices[identifier] = device
+            }
             
             // Print all devices after adding
             print("DEBUG: DeviceStore now contains \(self.devices.count) devices:")
