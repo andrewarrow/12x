@@ -14,11 +14,8 @@ class CalendarEventStore: ObservableObject {
     @Published var events: [CalendarEvent] = []
     
     init() {
-        // Initialize with empty events for each month
-        for monthIndex in 1...12 {
-            let monthName = Calendar.current.monthSymbols[monthIndex - 1]
-            events.append(CalendarEvent(month: monthIndex, monthName: monthName))
-        }
+        // Load calendar events from disk
+        loadFromDisk()
     }
     
     // Get event for a specific month
@@ -32,7 +29,90 @@ class CalendarEventStore: ObservableObject {
         events[month - 1].location = location
         events[month - 1].day = day
         events[month - 1].isScheduled = true
+        events[month - 1].lastUpdated = Date()
         objectWillChange.send()
+        
+        // Save to disk after updating
+        saveToDisk()
+    }
+    
+    // Save calendar events to disk
+    private func saveToDisk() {
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(events)
+            UserDefaults.standard.set(data, forKey: "CalendarEvents")
+            print("Successfully saved calendar events to disk")
+        } catch {
+            print("Failed to save calendar events: \(error.localizedDescription)")
+        }
+    }
+    
+    // Load calendar events from disk
+    private func loadFromDisk() {
+        if let data = UserDefaults.standard.data(forKey: "CalendarEvents") {
+            do {
+                let decoder = JSONDecoder()
+                events = try decoder.decode([CalendarEvent].self, from: data)
+                print("Successfully loaded \(events.count) calendar events from disk")
+            } catch {
+                print("Failed to load calendar events: \(error.localizedDescription)")
+                initializeEmptyEvents()
+            }
+        } else {
+            print("No saved calendar events found, initializing empty events")
+            initializeEmptyEvents()
+        }
+    }
+    
+    // Initialize empty events for each month
+    private func initializeEmptyEvents() {
+        events = []
+        for monthIndex in 1...12 {
+            let monthName = Calendar.current.monthSymbols[monthIndex - 1]
+            events.append(CalendarEvent(month: monthIndex, monthName: monthName))
+        }
+    }
+    
+    // Sync calendar events with another device over Bluetooth
+    func syncEvents(with deviceEvents: [CalendarEvent]) -> [String] {
+        var syncLogMessages: [String] = []
+        
+        // Compare each month's events and use the most recently updated one
+        for deviceEvent in deviceEvents {
+            let month = deviceEvent.month
+            let ourEvent = events[month - 1]
+            
+            // If one has an event and the other doesn't, take the one with the event
+            if deviceEvent.isScheduled && !ourEvent.isScheduled {
+                syncLogMessages.append("\(deviceEvent.monthName) event '\(deviceEvent.title)' on day \(deviceEvent.day) received from connected device.")
+                events[month - 1] = deviceEvent
+            } 
+            else if ourEvent.isScheduled && !deviceEvent.isScheduled {
+                syncLogMessages.append("\(ourEvent.monthName) event '\(ourEvent.title)' on day \(ourEvent.day) sent to connected device.")
+                // Keep our event (no change needed)
+            }
+            // If both have events, compare lastUpdated dates
+            else if deviceEvent.isScheduled && ourEvent.isScheduled {
+                let deviceName = deviceEvent.lastUpdatedBy ?? "Connected device"
+                let ourName = ourEvent.lastUpdatedBy ?? "You"
+                
+                if let deviceDate = deviceEvent.lastUpdated, let ourDate = ourEvent.lastUpdated, deviceDate > ourDate {
+                    syncLogMessages.append("\(deviceEvent.monthName) event: \(deviceName) has '\(deviceEvent.title)' on day \(deviceEvent.day) but \(ourName) has '\(ourEvent.title)' on day \(ourEvent.day). Using newer version.")
+                    events[month - 1] = deviceEvent
+                } else {
+                    syncLogMessages.append("\(ourEvent.monthName) event: \(ourName) has '\(ourEvent.title)' on day \(ourEvent.day) but \(deviceName) has '\(deviceEvent.title)' on day \(deviceEvent.day). Keeping our version.")
+                    // Keep our event (no change needed)
+                }
+            }
+        }
+        
+        // Save changes to disk after syncing
+        if !syncLogMessages.isEmpty {
+            saveToDisk()
+        }
+        
+        return syncLogMessages
     }
 }
 
@@ -43,7 +123,7 @@ struct EventFormIdentifier: Identifiable {
 }
 
 // Model for a single calendar event
-struct CalendarEvent: Identifiable {
+struct CalendarEvent: Identifiable, Codable {
     var id: Int { month }
     let month: Int
     let monthName: String
@@ -51,8 +131,10 @@ struct CalendarEvent: Identifiable {
     var location: String = ""
     var day: Int = 1
     var isScheduled: Bool = false
+    var lastUpdated: Date? = nil
+    var lastUpdatedBy: String? = nil
     
-    // Get the card colors for each month
+    // Non-Codable UI properties with CodingKeys to exclude them
     var cardColor: (Color, Color) {
         let colors: [(Color, Color)] = [
             (Color.blue.opacity(0.7), Color.cyan.opacity(0.7)),                // January
@@ -78,6 +160,11 @@ struct CalendarEvent: Identifiable {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+    
+    // Custom encoding/decoding for SwiftUI types that aren't Codable
+    enum CodingKeys: String, CodingKey {
+        case month, monthName, title, location, day, isScheduled, lastUpdated, lastUpdatedBy
     }
 }
 
@@ -352,6 +439,10 @@ struct SavedDeviceRow: View {
     let device: DeviceStore.SavedDeviceInfo
     @ObservedObject var bluetoothManager: BluetoothManager
     @State private var isConnecting = false
+    @State private var showingSyncModal = false
+    @State private var syncInProgress = false
+    @State private var syncMessages: [String] = []
+    @State private var bytesTransferred: Int = 0
     
     var body: some View {
         HStack {
@@ -385,8 +476,31 @@ struct SavedDeviceRow: View {
             
             Spacer()
             
-            // Connect button
-            if device.connectionStatus != .connected {
+            // Connect or Sync button based on status
+            if device.connectionStatus == .connected {
+                // Show Sync button for connected devices
+                Button(action: {
+                    showingSyncModal = true
+                }) {
+                    Text("Sync")
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+                .sheet(isPresented: $showingSyncModal) {
+                    SyncModalView(
+                        deviceName: device.displayName,
+                        syncInProgress: $syncInProgress,
+                        syncMessages: $syncMessages,
+                        bytesTransferred: $bytesTransferred,
+                        onSync: performSync
+                    )
+                }
+            } else if device.connectionStatus == .new || device.connectionStatus == .error {
+                // Show Connect button for new or error devices
                 Button(action: {
                     connectToDevice()
                 }) {
@@ -404,10 +518,6 @@ struct SavedDeviceRow: View {
                     }
                 }
                 .disabled(isConnecting)
-            } else {
-                Text("Connected")
-                    .font(.caption)
-                    .foregroundColor(.green)
             }
         }
         .padding(.vertical, 8)
@@ -439,6 +549,259 @@ struct SavedDeviceRow: View {
         // Set a timeout to stop the connecting spinner after 5 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             isConnecting = false
+        }
+    }
+    
+    // Perform calendar sync with the device
+    private func performSync() {
+        syncInProgress = true
+        syncMessages = []
+        bytesTransferred = 0
+        
+        // Simulate Bluetooth communication
+        syncMessages.append("Initiating sync with \(device.displayName)...")
+        
+        // Simulate the sync process with a timer
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+            guard syncInProgress else {
+                timer.invalidate()
+                return
+            }
+            
+            // Increment bytes - simulate sending some data
+            let newBytes = Int.random(in: 100...500)
+            bytesTransferred += newBytes
+            
+            if syncMessages.count < 2 {
+                syncMessages.append("Establishing secure connection...")
+            } else if syncMessages.count < 3 {
+                syncMessages.append("Requesting calendar data...")
+            } else if syncMessages.count < 7 {
+                // Generate mock sync messages
+                let mockEvents = generateRandomEvents()
+                let eventStore = CalendarEventStore.shared
+                let newMessages = eventStore.syncEvents(with: mockEvents)
+                
+                if !newMessages.isEmpty {
+                    syncMessages.append(newMessages.first!)
+                }
+            } else {
+                // Complete the sync after several iterations
+                syncMessages.append("Sync completed successfully! \(bytesTransferred) bytes transferred.")
+                syncInProgress = false
+                timer.invalidate()
+            }
+        }
+    }
+    
+    // Generate random events for simulation
+    private func generateRandomEvents() -> [CalendarEvent] {
+        var events: [CalendarEvent] = []
+        
+        // Get our current events to create differences for some of them
+        let currentEvents = CalendarEventStore.shared.events
+        
+        for monthIndex in 1...12 {
+            let monthName = Calendar.current.monthSymbols[monthIndex - 1]
+            var event = CalendarEvent(month: monthIndex, monthName: monthName)
+            
+            // For some months, create an event with a 30% chance if we don't have one
+            // or create a different event with a 20% chance if we already have one
+            if !currentEvents[monthIndex-1].isScheduled && Int.random(in: 1...10) <= 3 {
+                // Create a new event
+                event.isScheduled = true
+                event.title = "Family Trip"
+                event.location = "Theme Park"
+                event.day = Int.random(in: 1...28)
+                event.lastUpdated = Date().addingTimeInterval(-Double(Int.random(in: 1...100000)))
+                event.lastUpdatedBy = device.displayName
+            } else if currentEvents[monthIndex-1].isScheduled && Int.random(in: 1...10) <= 2 {
+                // Create a conflicting event (different than our current one)
+                event.isScheduled = true
+                event.title = "Birthday Party"
+                event.location = "Grandma's House"
+                event.day = Int.random(in: 1...28)
+                
+                // 50% chance the remote event is newer
+                if Bool.random() {
+                    event.lastUpdated = Date()
+                } else {
+                    event.lastUpdated = Date().addingTimeInterval(-Double(Int.random(in: 200000...500000)))
+                }
+                event.lastUpdatedBy = device.displayName
+            } else {
+                // Keep our existing event
+                event = currentEvents[monthIndex-1]
+            }
+            
+            events.append(event)
+        }
+        
+        return events
+    }
+}
+
+// Modal view for syncing calendar data with family members
+struct SyncModalView: View {
+    let deviceName: String
+    @Binding var syncInProgress: Bool
+    @Binding var syncMessages: [String]
+    @Binding var bytesTransferred: Int
+    let onSync: () -> Void
+    
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    // Header
+                    HStack {
+                        Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                            .font(.largeTitle)
+                            .foregroundColor(.blue)
+                        
+                        Text("Calendar Sync")
+                            .font(.title)
+                            .fontWeight(.bold)
+                    }
+                    .padding(.top)
+                    
+                    // Device info
+                    HStack {
+                        Image(systemName: "iphone.circle.fill")
+                            .font(.title)
+                            .foregroundColor(.blue)
+                        
+                        Text("Syncing with: \(deviceName)")
+                            .font(.headline)
+                    }
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(10)
+                    
+                    // Progress section
+                    VStack(alignment: .leading, spacing: 10) {
+                        if syncInProgress {
+                            HStack {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                
+                                Text("Syncing in progress...")
+                                    .foregroundColor(.blue)
+                            }
+                            
+                            // Transfer stats
+                            HStack {
+                                Text("Bytes Transferred:")
+                                    .font(.caption)
+                                
+                                Text("\(bytesTransferred)")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                            }
+                        } else if !syncMessages.isEmpty && syncMessages.last?.contains("completed") == true {
+                            // Success message
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                
+                                Text("Sync Completed")
+                                    .foregroundColor(.green)
+                                    .fontWeight(.bold)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color.white.opacity(0.5))
+                    .cornerRadius(10)
+                    
+                    // Sync log messages
+                    VStack(alignment: .leading) {
+                        Text("Sync Details:")
+                            .font(.headline)
+                            .padding(.bottom, 5)
+                        
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(syncMessages, id: \.self) { message in
+                                    HStack(alignment: .top) {
+                                        Text("•")
+                                            .foregroundColor(.blue)
+                                        
+                                        Text(message)
+                                            .font(.system(.body, design: .monospaced))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 300)
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.5))
+                    .cornerRadius(10)
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    if syncInProgress {
+                        Button(action: {
+                            syncInProgress = false
+                            syncMessages.append("Sync cancelled by user.")
+                        }) {
+                            Text("Cancel Sync")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.red)
+                                .cornerRadius(10)
+                        }
+                    } else if syncMessages.isEmpty {
+                        Button(action: onSync) {
+                            Text("Start Sync")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.blue)
+                                .cornerRadius(10)
+                        }
+                    } else {
+                        Button(action: {
+                            presentationMode.wrappedValue.dismiss()
+                        }) {
+                            Text("Close")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.blue)
+                                .cornerRadius(10)
+                        }
+                    }
+                }
+                .padding()
+            }
+            .navigationBarTitle("", displayMode: .inline)
+            .navigationBarItems(trailing: Button(action: {
+                presentationMode.wrappedValue.dismiss()
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.gray)
+            })
         }
     }
 }
@@ -658,7 +1021,14 @@ struct EventFormView: View {
     }
     
     private func saveEvent() {
+        // Get the device name
+        let deviceName = UIDevice.current.name
+        
+        // Update the event with the device name as lastUpdatedBy
         eventStore.updateEvent(month: month, title: title, location: location, day: day)
+        // Set the lastUpdatedBy field
+        eventStore.events[month - 1].lastUpdatedBy = deviceName
+        
         presentationMode.wrappedValue.dismiss()
     }
 }
