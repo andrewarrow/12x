@@ -649,6 +649,7 @@ struct SavedDeviceRow: View {
                 Text(device.displayName)
                     .font(.headline)
                 
+                // Status row
                 HStack {
                     // Status indicator
                     Image(systemName: device.connectionStatus.icon)
@@ -656,19 +657,20 @@ struct SavedDeviceRow: View {
                     
                     Text(statusText)
                         .font(.caption)
+                        .foregroundColor(device.connectionStatus == .connected ? .green : .secondary)
+                }
+                
+                // Only show last connected time for connected devices
+                if device.connectionStatus == .connected, let lastConnected = device.lastConnected {
+                    Text("Last seen: \(timeAgo(from: lastConnected))")
+                        .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    if let lastConnected = device.lastConnected {
-                        Text("Last: \(timeAgo(from: lastConnected))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
                 }
             }
             
             Spacer()
             
-            // Connect button or Sync button based on connection status
+            // Action button (Connect or Sync) based on connection status
             if device.connectionStatus != .connected {
                 Button(action: {
                     connectToDevice()
@@ -689,23 +691,17 @@ struct SavedDeviceRow: View {
                 .disabled(isConnecting)
             } else {
                 // Sync button for connected devices
-                HStack(spacing: 8) {
-                    Text("Connected")
+                Button(action: {
+                    print("[SyncUI] Sync button tapped for device \(device.displayName) (\(device.identifier))")
+                    showingSyncModal = true
+                }) {
+                    Text("Sync")
                         .font(.caption)
-                        .foregroundColor(.green)
-                    
-                    Button(action: {
-                        print("[SyncUI] Sync button tapped for device \(device.displayName) (\(device.identifier))")
-                        showingSyncModal = true
-                    }) {
-                        Text("Sync")
-                            .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.purple)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-                    }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.purple)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
                 }
             }
         }
