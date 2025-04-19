@@ -1,0 +1,15 @@
+in the Calendar tab show 12 cards in different colors one for each month stacked
+vertically. Look at w.PNG file to see example from the wallet app for how it 
+should look. But instead of credit cards, these are cards for each of the 12 months.
+
+The idea of this app called 12x is to schedule 12 events, one per month, with
+your family. This is not a normal calendar where you can add an event to any date.
+Here you can only pick a month, and then either add the first event for that month
+if none exist yet, or edit the event for that month that's already there.
+
+There can only be 1 event per month. Each event should have a title, a location,
+and a day within the month.
+
+Just store the data in memory for now. In a future task we'll persist to disk.
+Don't worry about syncing the data in the calendar to other family members yet.
+
