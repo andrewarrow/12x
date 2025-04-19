@@ -746,30 +746,70 @@ struct SettingsView: View {
     }
     
     private func populateSampleEvents() {
-        // Sample event data for each month
-        let sampleEvents: [(title: String, location: String, day: Int)] = [
-            ("Winter Festival", "Town Square", 15),            // January
-            ("Valentine's Dinner", "Italian Restaurant", 14),  // February
-            ("Spring Break Trip", "Beach Resort", 20),         // March
-            ("Family Picnic", "Central Park", 12),             // April
-            ("Mother's Day Brunch", "Mom's Favorite Cafe", 8), // May
-            ("Summer Camp Starts", "Camp Wilderness", 24),     // June
-            ("Independence Fireworks", "Lakeside", 4),         // July
-            ("Family Reunion", "Grandma's House", 18),         // August
-            ("Back to School", "Shopping Mall", 2),            // September
-            ("Halloween Party", "Community Center", 31),       // October
-            ("Thanksgiving Dinner", "Home", 25),               // November
-            ("Holiday Celebration", "Mountain Cabin", 24)      // December
+        // Sample event titles for each month with multiple options for randomness
+        let sampleTitles: [[String]] = [
+            ["Winter Festival", "Ski Trip", "Ice Skating Day", "New Year Celebration"],            // January
+            ["Valentine's Dinner", "Family Game Night", "Weekend Getaway", "Movie Marathon"],      // February
+            ["Spring Break Trip", "Garden Planting", "Hiking Adventure", "Museum Visit"],          // March
+            ["Family Picnic", "Bike Riding Day", "Outdoor Concert", "Easter Celebration"],         // April
+            ["Mother's Day Brunch", "Family Portrait", "Farmers Market Trip", "Spring Cleaning"],  // May
+            ["Summer Camp Starts", "Beach Day", "Camping Trip", "Road Trip"],                      // June
+            ["Independence Fireworks", "BBQ Party", "Pool Party", "Family Reunion"],               // July
+            ["Family Reunion", "Water Park Day", "Fishing Trip", "Stargazing Night"],              // August
+            ["Back to School", "Apple Picking", "Fall Festival", "Football Game"],                 // September
+            ["Halloween Party", "Pumpkin Carving", "Haunted House Tour", "Costume Shopping"],      // October
+            ["Thanksgiving Dinner", "Black Friday Shopping", "Family Photos", "Baking Day"],       // November
+            ["Holiday Celebration", "Gift Exchange", "Cookie Decorating", "New Year's Eve Party"]  // December
         ]
         
-        // Populate each month with a sample event
+        // Sample locations with multiple options for randomness
+        let sampleLocations: [[String]] = [
+            ["Town Square", "Ski Resort", "Winter Park", "Community Center"],                      // January
+            ["Italian Restaurant", "Home", "Cozy Cabin", "Family Room"],                           // February
+            ["Beach Resort", "Botanical Gardens", "Mountain Trails", "City Museum"],               // March
+            ["Central Park", "Bike Trail", "Amphitheater", "Grandma's House"],                     // April
+            ["Mom's Favorite Cafe", "Portrait Studio", "Local Market", "Home"],                    // May
+            ["Camp Wilderness", "Sunny Beach", "National Park", "Interstate 95"],                  // June
+            ["Lakeside", "Backyard", "Community Pool", "Uncle Bob's House"],                       // July
+            ["Grandma's House", "Water World", "Lake Michigan", "Backyard"],                       // August
+            ["Shopping Mall", "Apple Orchard", "County Fair", "Stadium"],                          // September
+            ["Community Center", "Pumpkin Patch", "Haunted Mansion", "Costume Store"],             // October
+            ["Home", "Downtown Mall", "Photography Studio", "Kitchen"],                            // November
+            ["Mountain Cabin", "Living Room", "Bakery", "Downtown"]                                // December
+        ]
+        
+        // Populate each month with a random event from options
         for month in 1...12 {
-            let event = sampleEvents[month - 1]
+            // Get random title and location from options for this month
+            let titles = sampleTitles[month - 1]
+            let locations = sampleLocations[month - 1]
+            
+            let randomTitleIndex = Int.random(in: 0..<titles.count)
+            let randomLocationIndex = Int.random(in: 0..<locations.count)
+            
+            // Get random day appropriate for the month
+            let maxDay: Int
+            switch month {
+            case 2:
+                // February (accounting for leap year)
+                let year = Calendar.current.component(.year, from: Date())
+                let isLeapYear = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+                maxDay = isLeapYear ? 29 : 28
+            case 4, 6, 9, 11:
+                // April, June, September, November
+                maxDay = 30
+            default:
+                maxDay = 31
+            }
+            
+            let randomDay = Int.random(in: 1...maxDay)
+            
+            // Update the event store with random values
             eventStore.updateEvent(
                 month: month,
-                title: event.title,
-                location: event.location,
-                day: event.day
+                title: titles[randomTitleIndex],
+                location: locations[randomLocationIndex],
+                day: randomDay
             )
         }
         
