@@ -16,22 +16,30 @@ class BluetoothManager: NSObject, ObservableObject {
     private var peripheralManager: CBPeripheralManager!
     
     // MARK: - UUIDs
-    private let serviceUUID = CBUUID(string: "4514d666-d6c9-49cb-bc31-dc6dfa28bd58")
-    private let messageCharacteristicUUID = CBUUID(string: "462d10ad-e297-4620-a3af-d964f92fd1a5")
-    private let responseCharacteristicUUID = CBUUID(string: "f3c6df3c-334a-4274-a4e9-2c9b1e9decb0")
+    // Made public for use in MainMenuView's sync functionality
+    let serviceUUID = CBUUID(string: "4514d666-d6c9-49cb-bc31-dc6dfa28bd58")
+    let messageCharacteristicUUID = CBUUID(string: "462d10ad-e297-4620-a3af-d964f92fd1a5")
+    let responseCharacteristicUUID = CBUUID(string: "f3c6df3c-334a-4274-a4e9-2c9b1e9decb0")
     
     // Keep track of characteristics
     private var messageCharacteristic: CBMutableCharacteristic?
     private var responseCharacteristic: CBMutableCharacteristic?
     
     // Track characteristics discovered for peripherals
-    private var discoveredCharacteristics: [UUID: [CBUUID: CBCharacteristic]] = [:]
+    // Made public to allow MainMenuView to access during sync
+    var discoveredCharacteristics: [UUID: [CBUUID: CBCharacteristic]] = [:]
     
     // MARK: - Message Exchange
     enum MessageType: String {
         case hello = "HELLO"
         case hi = "HI"
+        case syncStart = "SYNC_START"
+        case syncEnd = "SYNC_END"
     }
+    
+    // Buffer for accumulating data chunks during sync
+    private var syncDataBuffer: Data = Data()
+    private var syncInProgress: Bool = false
     
     struct ConnectionResult {
         enum Status {
@@ -648,55 +656,192 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
+        print("📲 BT RECEIVE: Received \(requests.count) write requests")
+        
         for request in requests {
+            // Log detailed information about the request
+            print("📲 BT RECEIVE: Request for characteristic: \(request.characteristic.uuid)")
+            
             guard let data = request.value else {
-                // Respond to invalid requests
+                print("📲 BT RECEIVE ERROR: No data in request")
                 peripheral.respond(to: request, withResult: .invalidAttributeValueLength)
                 continue
+            }
+            
+            print("📲 BT RECEIVE: Got \(data.count) bytes of data")
+            
+            // Try to decode as a string for logging
+            if let stringValue = String(data: data, encoding: .utf8) {
+                print("📲 BT RECEIVE: Data as string: \(stringValue)")
+            } else {
+                print("📲 BT RECEIVE: Data could not be decoded as string")
             }
             
             // Handle based on characteristic
             if request.characteristic.uuid == messageCharacteristicUUID || 
                request.characteristic.uuid == responseCharacteristicUUID {
+                
+                print("📲 BT RECEIVE: Processing message on \(request.characteristic.uuid == messageCharacteristicUUID ? "message" : "response") characteristic")
+                
                 // Try to process the message
                 if handleReceivedMessage(data, from: request.central) {
+                    print("📲 BT RECEIVE: Message processing successful")
                     peripheral.respond(to: request, withResult: .success)
+                    
+                    // After successful processing, check if this is calendar data
+                    tryProcessCalendarData(data)
                 } else {
+                    print("📲 BT RECEIVE ERROR: Message processing failed")
                     peripheral.respond(to: request, withResult: .unlikelyError)
                 }
             } else {
-                // Unknown characteristic
+                print("📲 BT RECEIVE ERROR: Unknown characteristic UUID: \(request.characteristic.uuid)")
                 peripheral.respond(to: request, withResult: .requestNotSupported)
             }
         }
     }
     
-    private func handleReceivedMessage(_ data: Data, from central: CBCentral) -> Bool {
-        guard let message = String(data: data, encoding: .utf8),
-              let messageType = MessageType(rawValue: message) else {
-            print("Received invalid message data from central")
-            return false
+    // Try to process incoming data as calendar data
+    private func tryProcessCalendarData(_ data: Data) {
+        // First check if it starts with a known message type
+        if let message = String(data: data, encoding: .utf8),
+           MessageType(rawValue: message) != nil {
+            // This is a control message, not calendar data
+            print("📲 BT RECEIVE: Data is a control message, not calendar data")
+            return
         }
         
-        print("Received '\(messageType.rawValue)' from central")
+        // Try to decode as calendar events
+        do {
+            let decoder = JSONDecoder()
+            let events = try decoder.decode([CalendarEvent].self, from: data)
+            print("📲 BT RECEIVE: Successfully decoded \(events.count) calendar events!")
+            
+            // Process the received calendar events
+            let eventStore = CalendarEventStore.shared
+            let syncMessages = eventStore.syncEvents(with: events)
+            
+            print("📲 BT RECEIVE: Calendar sync completed with \(syncMessages.count) updates")
+            for message in syncMessages {
+                print("📲 BT RECEIVE: \(message)")
+            }
+            
+        } catch {
+            // Not calendar data or decoding failed
+            print("📲 BT RECEIVE: Data is not valid calendar data: \(error)")
+        }
+    }
+    
+    private func handleReceivedMessage(_ data: Data, from central: CBCentral) -> Bool {
+        // First try to decode as a control message (HELLO, HI, SYNC_START, SYNC_END)
+        if let message = String(data: data, encoding: .utf8),
+           let messageType = MessageType(rawValue: message) {
+            
+            print("📲 BT RECEIVE: Received control message '\(messageType.rawValue)' from central")
+            
+            switch messageType {
+            case .hello:
+                // Respond with "HI" to a "HELLO"
+                guard let responseChar = responseCharacteristic else {
+                    print("📲 BT RECEIVE ERROR: Response characteristic not found")
+                    return false
+                }
+                
+                guard let data = MessageType.hi.rawValue.data(using: .utf8) else {
+                    print("📲 BT RECEIVE ERROR: Failed to convert HI message to data")
+                    return false
+                }
+                
+                // Send response
+                print("📲 BT RECEIVE: Responding with HI to HELLO message")
+                peripheralManager.updateValue(data, for: responseChar, onSubscribedCentrals: [central])
+                return true
+                
+            case .syncStart:
+                // Start of a sync operation - clear the buffer
+                print("📲 BT RECEIVE: Starting sync operation, clearing buffer")
+                syncDataBuffer = Data()
+                syncInProgress = true
+                return true
+                
+            case .syncEnd:
+                // End of sync operation - process the accumulated data
+                print("📲 BT RECEIVE: End of sync, processing \(syncDataBuffer.count) bytes of accumulated data")
+                syncInProgress = false
+                
+                // Process the complete data
+                if !syncDataBuffer.isEmpty {
+                    return processCalendarData(syncDataBuffer)
+                }
+                return true
+                
+            default:
+                return true
+            }
+        }
         
-        if messageType == .hello {
-            // Respond with "HI" to a "HELLO"
-            guard let responseChar = responseCharacteristic else {
-                print("Response characteristic not found")
-                return false
-            }
-            
-            guard let data = MessageType.hi.rawValue.data(using: .utf8) else {
-                print("Failed to convert HI message to data")
-                return false
-            }
-            
-            // Send response
-            peripheralManager.updateValue(data, for: responseChar, onSubscribedCentrals: [central])
+        // If sync is in progress, add this chunk to the buffer
+        if syncInProgress {
+            print("📲 BT RECEIVE: Adding \(data.count) bytes to sync buffer (now \(syncDataBuffer.count + data.count) bytes total)")
+            syncDataBuffer.append(data)
             return true
         }
         
-        return true
+        // If not a control message and not in a sync, try to handle as complete calendar data
+        print("📲 BT RECEIVE: Received \(data.count) bytes of non-control data, trying to process as calendar data")
+        return processCalendarData(data)
+    }
+    
+    // Process calendar data and update the event store
+    private func processCalendarData(_ data: Data) -> Bool {
+        do {
+            // First, log a preview of the received data
+            if let preview = String(data: data.prefix(min(200, data.count)), encoding: .utf8) {
+                print("📲 BT RECEIVE: Data preview: \(preview)...")
+            }
+            
+            // Attempt to decode the data as calendar events
+            let decoder = JSONDecoder()
+            let events = try decoder.decode([CalendarEvent].self, from: data)
+            print("📲 BT RECEIVE: Successfully decoded calendar data with \(events.count) events")
+            
+            // Process the calendar data with the event store
+            let eventStore = CalendarEventStore.shared
+            let syncMessages = eventStore.syncEvents(with: events)
+            
+            if !syncMessages.isEmpty {
+                print("📲 BT RECEIVE: Calendar sync processed \(syncMessages.count) event updates")
+                for message in syncMessages {
+                    print("📲 BT RECEIVE: \(message)")
+                }
+                
+                // Force save to disk after sync
+                print("📲 BT RECEIVE: Saving updated calendar to disk")
+                if let saveMethod = class_getInstanceMethod(CalendarEventStore.self, Selector(("saveToDisk"))) {
+                    typealias SaveFunction = @convention(c) (AnyObject, Selector) -> Void
+                    let saveImplementation = unsafeBitCast(method_getImplementation(saveMethod), to: SaveFunction.self)
+                    saveImplementation(eventStore, Selector(("saveToDisk")))
+                } else {
+                    print("📲 BT RECEIVE ERROR: Could not find saveToDisk method")
+                }
+            } else {
+                print("📲 BT RECEIVE: No calendar changes needed during sync")
+            }
+            
+            return true
+        } catch {
+            // If we can't decode as calendar data, log the error
+            print("📲 BT RECEIVE ERROR: Failed to decode data as calendar events: \(error.localizedDescription)")
+            
+            // Also log the data that failed to decode
+            if let dataString = String(data: data, encoding: .utf8) {
+                print("📲 BT RECEIVE ERROR: Failed data: \(dataString)")
+            } else {
+                print("📲 BT RECEIVE ERROR: Failed data could not be converted to string")
+            }
+            
+            // But still return true since we processed the message
+            return true
+        }
     }
 }

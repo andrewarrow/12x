@@ -37,12 +37,15 @@ class CalendarEventStore: ObservableObject {
     }
     
     // Save calendar events to disk
-    private func saveToDisk() {
+    @objc public func saveToDisk() {
         do {
             let encoder = JSONEncoder()
             let data = try encoder.encode(events)
             UserDefaults.standard.set(data, forKey: "CalendarEvents")
             print("Successfully saved calendar events to disk")
+            
+            // Force immediate synchronization to ensure data is written
+            UserDefaults.standard.synchronize()
         } catch {
             print("Failed to save calendar events: \(error.localizedDescription)")
         }
@@ -55,6 +58,9 @@ class CalendarEventStore: ObservableObject {
                 let decoder = JSONDecoder()
                 events = try decoder.decode([CalendarEvent].self, from: data)
                 print("Successfully loaded \(events.count) calendar events from disk")
+                
+                // Check if we should integrate any synced events from paired devices
+                loadSyncedEventsFromPairedDevices()
             } catch {
                 print("Failed to load calendar events: \(error.localizedDescription)")
                 initializeEmptyEvents()
@@ -62,6 +68,49 @@ class CalendarEventStore: ObservableObject {
         } else {
             print("No saved calendar events found, initializing empty events")
             initializeEmptyEvents()
+            
+            // Even with empty events, check for synced events from paired devices
+            loadSyncedEventsFromPairedDevices()
+        }
+    }
+    
+    // Load synced events from paired devices
+    private func loadSyncedEventsFromPairedDevices() {
+        // Look for remote device calendar data in UserDefaults
+        // Keys will be in format "RemoteCalendarEvents_<deviceId>"
+        let allKeys = UserDefaults.standard.dictionaryRepresentation().keys
+        let syncedKeys = allKeys.filter { $0.hasPrefix("RemoteCalendarEvents_") }
+        
+        // If we found synced data from at least one device, integrate it
+        if !syncedKeys.isEmpty {
+            print("📱 Found synced calendar data from \(syncedKeys.count) paired devices")
+            
+            var hasChanges = false
+            
+            for key in syncedKeys {
+                if let syncedData = UserDefaults.standard.data(forKey: key) {
+                    do {
+                        let decoder = JSONDecoder()
+                        let syncedEvents = try decoder.decode([CalendarEvent].self, from: syncedData)
+                        print("📱 Processing synced data from key: \(key), \(syncedEvents.count) events")
+                        
+                        // Integrate these events with our existing events
+                        let syncMessages = syncEvents(with: syncedEvents)
+                        if !syncMessages.isEmpty {
+                            print("📱 Integrated \(syncMessages.count) events from paired device")
+                            hasChanges = true
+                        }
+                    } catch {
+                        print("📱 Error decoding synced data from key \(key): \(error)")
+                    }
+                }
+            }
+            
+            // Save any changes back to disk
+            if hasChanges {
+                saveToDisk()
+                print("📱 Saved integrated events back to disk")
+            }
         }
     }
     
@@ -77,6 +126,7 @@ class CalendarEventStore: ObservableObject {
     // Sync calendar events with another device over Bluetooth
     func syncEvents(with deviceEvents: [CalendarEvent]) -> [String] {
         var syncLogMessages: [String] = []
+        print("📆 SYNC: Starting calendar sync with \(deviceEvents.count) events")
         
         // Compare each month's events and use the most recently updated one
         for deviceEvent in deviceEvents {
@@ -85,31 +135,52 @@ class CalendarEventStore: ObservableObject {
             
             // If one has an event and the other doesn't, take the one with the event
             if deviceEvent.isScheduled && !ourEvent.isScheduled {
-                syncLogMessages.append("\(deviceEvent.monthName) event '\(deviceEvent.title)' on day \(deviceEvent.day) received from connected device.")
+                let message = "\(deviceEvent.monthName) event '\(deviceEvent.title)' on day \(deviceEvent.day) received from connected device."
+                syncLogMessages.append(message)
+                print("📆 SYNC: \(message)")
                 events[month - 1] = deviceEvent
             } 
             else if ourEvent.isScheduled && !deviceEvent.isScheduled {
-                syncLogMessages.append("\(ourEvent.monthName) event '\(ourEvent.title)' on day \(ourEvent.day) sent to connected device.")
+                let message = "\(ourEvent.monthName) event '\(ourEvent.title)' on day \(ourEvent.day) sent to connected device."
+                syncLogMessages.append(message)
+                print("📆 SYNC: \(message)")
                 // Keep our event (no change needed)
             }
-            // If both have events, compare lastUpdated dates
+            // If both have events, check if they're actually different
             else if deviceEvent.isScheduled && ourEvent.isScheduled {
                 let deviceName = deviceEvent.lastUpdatedBy ?? "Connected device"
                 let ourName = ourEvent.lastUpdatedBy ?? "You"
                 
-                if let deviceDate = deviceEvent.lastUpdated, let ourDate = ourEvent.lastUpdated, deviceDate > ourDate {
-                    syncLogMessages.append("\(deviceEvent.monthName) event: \(deviceName) has '\(deviceEvent.title)' on day \(deviceEvent.day) but \(ourName) has '\(ourEvent.title)' on day \(ourEvent.day). Using newer version.")
-                    events[month - 1] = deviceEvent
+                // Only compare if the events are actually different
+                let eventsAreDifferent = deviceEvent.title != ourEvent.title || 
+                                          deviceEvent.location != ourEvent.location ||
+                                          deviceEvent.day != ourEvent.day
+                
+                if eventsAreDifferent {
+                    // If different, compare lastUpdated dates
+                    if let deviceDate = deviceEvent.lastUpdated, let ourDate = ourEvent.lastUpdated, deviceDate > ourDate {
+                        let message = "\(deviceEvent.monthName) event: \(deviceName) has '\(deviceEvent.title)' on day \(deviceEvent.day) but \(ourName) has '\(ourEvent.title)' on day \(ourEvent.day). Using newer version."
+                        syncLogMessages.append(message)
+                        print("📆 SYNC: \(message)")
+                        events[month - 1] = deviceEvent
+                    } else {
+                        let message = "\(ourEvent.monthName) event: \(ourName) has '\(ourEvent.title)' on day \(ourEvent.day) but \(deviceName) has '\(deviceEvent.title)' on day \(deviceEvent.day). Keeping our version."
+                        syncLogMessages.append(message)
+                        print("📆 SYNC: \(message)")
+                        // Keep our event (no change needed)
+                    }
                 } else {
-                    syncLogMessages.append("\(ourEvent.monthName) event: \(ourName) has '\(ourEvent.title)' on day \(ourEvent.day) but \(deviceName) has '\(deviceEvent.title)' on day \(deviceEvent.day). Keeping our version.")
-                    // Keep our event (no change needed)
+                    print("📆 SYNC: \(deviceEvent.monthName) events are identical, no sync needed.")
                 }
             }
         }
         
         // Save changes to disk after syncing
         if !syncLogMessages.isEmpty {
+            print("📆 SYNC: Saving \(syncLogMessages.count) synchronized events to disk")
             saveToDisk()
+        } else {
+            print("📆 SYNC: No changes to save")
         }
         
         return syncLogMessages
@@ -560,9 +631,25 @@ struct SavedDeviceRow: View {
         
         // Simulate Bluetooth communication
         syncMessages.append("Initiating sync with \(device.displayName)...")
+        print("🔄 SYNC: Initiating sync with \(device.displayName)...")
+        
+        // Store current device's name for simulation
+        let deviceName = device.displayName
+        let deviceId = device.identifier
+        
+        // Create a "simulation bridge" UserDefaults key for the remote device
+        // This will allow us to simulate data storage on the other device
+        let remoteDeviceKey = "RemoteCalendarEvents_\(deviceId)"
+        
+        // Fetch a reference to the peripheral we're syncing with (if available)
+        let peripheral = bluetoothManager.nearbyDevices.first { $0.identifier.uuidString == deviceId }
+        
+        // Reference the bluetooth manager
+        let btManager = bluetoothManager
         
         // Simulate the sync process with a timer
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+        var syncStage = 0
+        Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { timer in
             guard syncInProgress else {
                 timer.invalidate()
                 return
@@ -572,25 +659,267 @@ struct SavedDeviceRow: View {
             let newBytes = Int.random(in: 100...500)
             bytesTransferred += newBytes
             
-            if syncMessages.count < 2 {
-                syncMessages.append("Establishing secure connection...")
-            } else if syncMessages.count < 3 {
-                syncMessages.append("Requesting calendar data...")
-            } else if syncMessages.count < 7 {
-                // Generate mock sync messages
-                let mockEvents = generateRandomEvents()
-                let eventStore = CalendarEventStore.shared
-                let newMessages = eventStore.syncEvents(with: mockEvents)
+            syncStage += 1
+            
+            switch syncStage {
+            case 1:
+                // Stage 1: Establish connection
+                let message = "Establishing secure connection..."
+                syncMessages.append(message)
+                print("🔄 SYNC: \(message)")
                 
-                if !newMessages.isEmpty {
-                    syncMessages.append(newMessages.first!)
+                // Connect to the device if not already connected
+                if let deviceToConnect = peripheral, !btManager.connectedPeripherals.contains(where: { $0.identifier == deviceToConnect.identifier }) {
+                    btManager.connectToDevice(deviceToConnect)
+                    print("🔄 SYNC: Connecting to device \(deviceToConnect.identifier)")
                 }
-            } else {
-                // Complete the sync after several iterations
-                syncMessages.append("Sync completed successfully! \(bytesTransferred) bytes transferred.")
+                
+            case 2:
+                // Stage 2: Request remote calendar data
+                let message = "Requesting calendar data..."
+                syncMessages.append(message)
+                print("🔄 SYNC: \(message)")
+                
+                // If we have a connected peripheral, discover services
+                if let connectedPeripheral = peripheral, btManager.connectedPeripherals.contains(where: { $0.identifier == connectedPeripheral.identifier }) {
+                    print("🔄 SYNC: Device is connected, discovering services...")
+                    connectedPeripheral.discoverServices([btManager.serviceUUID])
+                }
+                
+            case 3:
+                // Stage 3: Get current device's calendar events
+                let eventStore = CalendarEventStore.shared
+                let ourEvents = eventStore.events
+                
+                // First, simulate receiving data from the remote device
+                var remoteEvents: [CalendarEvent]
+                
+                // Check if we have previously synced data for the remote device
+                if let remoteData = UserDefaults.standard.data(forKey: remoteDeviceKey) {
+                    do {
+                        let decoder = JSONDecoder()
+                        remoteEvents = try decoder.decode([CalendarEvent].self, from: remoteData)
+                        print("🔄 SYNC: Found existing remote device data")
+                    } catch {
+                        // If decode fails, generate empty events
+                        remoteEvents = generateEmptyEvents(deviceName: deviceName)
+                        print("🔄 SYNC: Error decoding remote data: \(error), using empty events")
+                    }
+                } else {
+                    // If no previous data, generate some random events as if they were from the remote device
+                    remoteEvents = generateRandomEvents()
+                    print("🔄 SYNC: No existing data found for remote device, using simulated data")
+                }
+                
+                // Log the incoming data from the remote device
+                if let jsonData = self.getJsonRepresentation(of: remoteEvents) {
+                    print("🔄 SYNC DATA (received from \(deviceName)): \(jsonData.count) bytes")
+                    print(String(data: jsonData, encoding: .utf8) ?? "Invalid JSON")
+                }
+                
+                // Sync our events with the remote events and capture the sync messages
+                let syncMessages = eventStore.syncEvents(with: remoteEvents)
+                
+                // Display up to 3 sync messages in the UI (to avoid cluttering)
+                for (index, message) in syncMessages.prefix(3).enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.5) {
+                        self.syncMessages.append(message)
+                        self.bytesTransferred += Int.random(in: 100...300)
+                    }
+                }
+                
+                // If there are more messages, add a summary
+                if syncMessages.count > 3 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        self.syncMessages.append("... \(syncMessages.count - 3) more events synced")
+                        self.bytesTransferred += Int.random(in: 300...700)
+                    }
+                }
+                
+                // Now actually send our calendar data to the other device over Bluetooth
+                // We need to ensure we have a connected peripheral and have discovered its services/characteristics
+                print("🔄 SYNC: Connection status check...")
+                
+                if let connectedPeripheral = peripheral {
+                    print("🔄 SYNC: Found peripheral: \(connectedPeripheral.identifier)")
+                    
+                    // First check if we're connected
+                    if !btManager.connectedPeripherals.contains(where: { $0.identifier == connectedPeripheral.identifier }) {
+                        print("🔄 SYNC: Not connected to peripheral, attempting connection...")
+                        btManager.connectToDevice(connectedPeripheral)
+                        
+                        // Add a delay to allow connection
+                        print("🔄 SYNC: Waiting for connection to complete...")
+                        Thread.sleep(forTimeInterval: 1.0)
+                    } else {
+                        print("🔄 SYNC: Already connected to peripheral")
+                    }
+                    
+                    // Now check if we have discovered the characteristics
+                    if btManager.discoveredCharacteristics[connectedPeripheral.identifier] == nil {
+                        print("🔄 SYNC: No characteristics discovered, initiating service discovery...")
+                        connectedPeripheral.discoverServices([btManager.serviceUUID])
+                        
+                        // Add a delay to allow service discovery
+                        print("🔄 SYNC: Waiting for service discovery to complete...")
+                        Thread.sleep(forTimeInterval: 2.0)
+                    } else {
+                        print("🔄 SYNC: Characteristics already discovered")
+                    }
+                    
+                    // Attempt to get the message characteristic
+                    if let charDict = btManager.discoveredCharacteristics[connectedPeripheral.identifier],
+                       let messageChar = charDict[btManager.messageCharacteristicUUID] {
+                        
+                        print("🔄 SYNC: Found message characteristic: \(messageChar.uuid)")
+                        
+                        do {
+                            // First, send a special "SYNC_START" message to prepare the receiver
+                            print("🔄 SYNC: Sending SYNC_START marker...")
+                            let startMarker = "SYNC_START".data(using: .utf8)!
+                            connectedPeripheral.writeValue(startMarker, for: messageChar, type: .withResponse)
+                            
+                            // Wait a bit for the receiver to process
+                            Thread.sleep(forTimeInterval: 0.5)
+                            
+                            // Encode our calendar events to JSON data
+                            let encoder = JSONEncoder()
+                            encoder.outputFormatting = .prettyPrinted  // Make it human readable for debugging
+                            let calendarData = try encoder.encode(ourEvents)
+                            
+                            // Use the message characteristic to write the data
+                            print("🔄 SYNC: Sending \(calendarData.count) bytes of calendar data over Bluetooth...")
+                            
+                            // First, log a small preview of the data for debugging
+                            if let preview = String(data: calendarData.prefix(200), encoding: .utf8) {
+                                print("🔄 SYNC: Data preview: \(preview)...")
+                            }
+                            
+                            // For large data, split into chunks
+                            let maxChunkSize = 128 // Use a smaller chunk size for reliability
+                            var offset = 0
+                            
+                            while offset < calendarData.count {
+                                let chunkSize = min(maxChunkSize, calendarData.count - offset)
+                                let range = offset..<(offset + chunkSize)
+                                let chunk = calendarData.subdata(in: range)
+                                
+                                print("🔄 SYNC: Sending chunk \(offset) to \(offset + chunkSize) of \(calendarData.count)")
+                                
+                                // Use the characteristic to send the data
+                                connectedPeripheral.writeValue(chunk, for: messageChar, type: .withResponse)
+                                
+                                offset += chunkSize
+                                // Add a larger delay between chunks for reliability
+                                Thread.sleep(forTimeInterval: 0.5)
+                            }
+                            
+                            // Send a special "SYNC_END" message to indicate completion
+                            print("🔄 SYNC: Sending SYNC_END marker...")
+                            let endMarker = "SYNC_END".data(using: .utf8)!
+                            connectedPeripheral.writeValue(endMarker, for: messageChar, type: .withResponse)
+                            
+                            print("🔄 SYNC: Calendar data sent successfully")
+                        } catch {
+                            print("🔄 SYNC ERROR: Failed to encode calendar data: \(error)")
+                        }
+                    } else {
+                        print("🔄 SYNC ERROR: Message characteristic not found after discovery")
+                    }
+                } else {
+                    print("🔄 SYNC ERROR: No peripheral found for device ID: \(deviceId)")
+                }
+                
+                // Also save to the "remote device" storage for simulation
+                do {
+                    let encoder = JSONEncoder()
+                    let updatedData = try encoder.encode(ourEvents)
+                    UserDefaults.standard.set(updatedData, forKey: remoteDeviceKey)
+                    print("🔄 SYNC: Successfully wrote \(updatedData.count) bytes to remote device storage")
+                } catch {
+                    print("🔄 SYNC ERROR: Failed to encode data for remote device: \(error)")
+                }
+                
+            case 4:
+                // Stage 4: Complete the sync
+                let eventStore = CalendarEventStore.shared
+                let ourEvents = eventStore.events
+                let jsonString = getJsonPreview()
+                let completeMessage = "Sync completed successfully! \(bytesTransferred) bytes transferred."
+                syncMessages.append(completeMessage)
+                syncMessages.append("JSON Data: \(jsonString)")
+                
+                // Log completion
+                print("🔄 SYNC: \(completeMessage)")
+                print("🔄 SYNC JSON: \(jsonString)")
+                
+                // Show how many events were scheduled on the remote device
+                let remoteScheduledCount = UserDefaults.standard.data(forKey: remoteDeviceKey) != nil ? "updated" : "not updated"
+                syncMessages.append("Remote device calendar \(remoteScheduledCount)")
+                
+                syncInProgress = false
+                timer.invalidate()
+                
+            default:
+                // Unexpected stage - stop the sync
                 syncInProgress = false
                 timer.invalidate()
             }
+        }
+    }
+    
+    // Generate set of empty events for a new device
+    private func generateEmptyEvents(deviceName: String) -> [CalendarEvent] {
+        var events: [CalendarEvent] = []
+        
+        for monthIndex in 1...12 {
+            let monthName = Calendar.current.monthSymbols[monthIndex - 1]
+            var event = CalendarEvent(month: monthIndex, monthName: monthName)
+            event.lastUpdatedBy = deviceName
+            events.append(event)
+        }
+        
+        return events
+    }
+    
+    // Get JSON representation of events to display and log
+    private func getJsonRepresentation(of events: [CalendarEvent]) -> Data? {
+        // Create a JSON encoder
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        
+        // Encode the events
+        do {
+            let data = try encoder.encode(events)
+            return data
+        } catch {
+            print("Error encoding events to JSON: \(error)")
+            return nil
+        }
+    }
+    
+    // Get a preview of the JSON data for display
+    private func getJsonPreview() -> String {
+        let ourEvents = CalendarEventStore.shared.events
+        
+        // Filter to just show scheduled events to keep preview manageable
+        let scheduledEvents = ourEvents.filter { $0.isScheduled }
+        
+        guard let jsonData = getJsonRepresentation(of: scheduledEvents) else {
+            return "{\"error\": \"Failed to encode data\"}"
+        }
+        
+        // Get the JSON string
+        guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return "{\"error\": \"Invalid JSON encoding\"}"
+        }
+        
+        // Only show the first part if it's very long
+        if jsonString.count > 400 {
+            let truncatedString = String(jsonString.prefix(400))
+            return truncatedString + "... (truncated)"
+        } else {
+            return jsonString
         }
     }
     
@@ -601,9 +930,19 @@ struct SavedDeviceRow: View {
         // Get our current events to create differences for some of them
         let currentEvents = CalendarEventStore.shared.events
         
+        // Check if the device is brand new (simulate empty calendar)
+        let isBrandNewDevice = device.connectionStatus == .new || Int.random(in: 1...10) <= 3
+        
         for monthIndex in 1...12 {
             let monthName = Calendar.current.monthSymbols[monthIndex - 1]
             var event = CalendarEvent(month: monthIndex, monthName: monthName)
+            
+            if isBrandNewDevice {
+                // Brand new device has no events - leave all events unscheduled
+                // This will make our events get synced to the device
+                events.append(event)
+                continue
+            }
             
             // For some months, create an event with a 30% chance if we don't have one
             // or create a different event with a 20% chance if we already have one
@@ -629,9 +968,37 @@ struct SavedDeviceRow: View {
                     event.lastUpdated = Date().addingTimeInterval(-Double(Int.random(in: 200000...500000)))
                 }
                 event.lastUpdatedBy = device.displayName
-            } else {
-                // Keep our existing event
-                event = currentEvents[monthIndex-1]
+            } else if currentEvents[monthIndex-1].isScheduled {
+                // For existing events, randomly decide whether to:
+                // 1. Send the same event back (most common case)
+                // 2. Don't have the event at all (less common)
+                // 3. Have a conflicting event (least common)
+                let rand = Int.random(in: 1...10)
+                
+                if rand <= 8 {
+                    // Most likely: device does not have this event
+                    // Do nothing, keep event unscheduled
+                } else if rand == 9 {
+                    // Sometimes: device has same event
+                    event = currentEvents[monthIndex-1]
+                    // But with different timestamps
+                    event.lastUpdated = Date().addingTimeInterval(-Double(Int.random(in: 500000...1000000)))
+                    event.lastUpdatedBy = device.displayName
+                } else {
+                    // Rarely: device has conflicting event
+                    event.isScheduled = true
+                    event.title = "Conference"
+                    event.location = "Convention Center"
+                    event.day = Int.random(in: 1...28)
+                    
+                    // 30% chance the device's event is newer
+                    if Int.random(in: 1...10) <= 3 {
+                        event.lastUpdated = Date()
+                    } else {
+                        event.lastUpdated = Date().addingTimeInterval(-Double(Int.random(in: 200000...500000)))
+                    }
+                    event.lastUpdatedBy = device.displayName
+                }
             }
             
             events.append(event)
@@ -642,6 +1009,42 @@ struct SavedDeviceRow: View {
 }
 
 // Modal view for syncing calendar data with family members
+// Helper view for displaying sync messages
+struct MessageRow: View {
+    let message: String
+    
+    var body: some View {
+        if message.hasPrefix("JSON Data:") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Data Payload:")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.blue)
+                
+                // Extract the JSON part
+                let jsonPart = message.replacingOccurrences(of: "JSON Data: ", with: "")
+                
+                Text(jsonPart)
+                    .font(.system(.caption, design: .monospaced))
+                    .padding(10)
+                    .background(Color.black.opacity(0.05))
+                    .cornerRadius(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.top, 10)
+        } else {
+            HStack(alignment: .top) {
+                Text("•")
+                    .foregroundColor(.blue)
+                
+                Text(message)
+                    .font(.system(.body, design: .monospaced))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
 struct SyncModalView: View {
     let deviceName: String
     @Binding var syncInProgress: Bool
@@ -733,16 +1136,12 @@ struct SyncModalView: View {
                         
                         ScrollView {
                             VStack(alignment: .leading, spacing: 10) {
-                                ForEach(syncMessages, id: \.self) { message in
-                                    HStack(alignment: .top) {
-                                        Text("•")
-                                            .foregroundColor(.blue)
-                                        
-                                        Text(message)
-                                            .font(.system(.body, design: .monospaced))
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    .padding(.vertical, 4)
+                                ForEach(Array(syncMessages.enumerated()), id: \.offset) { item in
+                                    let index = item.offset
+                                    let message = item.element
+                                    
+                                    MessageRow(message: message)
+                                        .padding(.vertical, 4)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
