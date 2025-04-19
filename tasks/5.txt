@@ -1,0 +1,9 @@
+Now that we are displaying the list of devices with checkboxes it's important
+to get the name right. Someone people name their iphone "Bob's Iphone" and we
+want to capture that. The GUID id of the device is important, it's keep that
+in memory and we'll need it later but for the user just display "Bob" if you can.
+If all you have is "iPhone" try and get at least some more information about it.
+Use RSSI signal strength or anything else available in Bluetooth to identify
+one device from another that will help family members know who's iphone is who's.
+There are many ways to get the name of an ios device. Use the same system air
+drop does if possible which nicely has the human readable name of ios devices.
