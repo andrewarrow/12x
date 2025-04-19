@@ -1,0 +1,40 @@
+Create Updates tab and pending changes store:
+
+1. Add a new "Updates" tab to the main UI alongside existing tabs
+2. Create a PendingChangesStore to track received calendar update requests
+3. Implement UI to display empty state when no updates are available
+4. Create a model for representing pending calendar changes
+5. Design UI components to display pending changes in a user-friendly format
+6. Add placeholder accept/reject buttons (functionality implemented later)
+7. Include timestamps and sender information with each pending change
+8. Add detailed logging with "[UpdatesTab]" prefix for all updates-related operations
+
+Debug Logging Requirements:
+- Log store initialization: "[UpdatesTab] PendingChangesStore initialized"
+- Log updates added to store: "[UpdatesTab] New pending change added: {changeType} from {sender}"
+- Log updates displayed: "[UpdatesTab] Displaying {count} pending changes"
+- Log empty state: "[UpdatesTab] No pending changes, showing empty state"
+- Log user interactions: "[UpdatesTab] User tapped on change from {sender} (placeholder action)"
+- Log UI component creation: "[UpdatesTab] Created pending change view for {eventTitle}"
+- Log store persistence: "[UpdatesTab] Saving {count} pending changes to storage"
+
+Testing Instructions (Two Phones):
+1. Build and run the app on both phones
+2. Navigate to the main UI and verify the new "Updates" tab appears
+3. Tap on the Updates tab and verify it shows the empty state with appropriate message
+4. Add debug code to manually populate the store with test pending changes:
+   - Add a debug button to the UI that adds a sample change
+   - Create at least 3 different types of changes (new event, date change, title change)
+5. Tap the debug button several times to add test changes
+6. Check the console logs to verify changes are being added to the store
+7. Navigate to the Updates tab and verify:
+   - The empty state is replaced with a list of changes
+   - Each change shows the sender name
+   - Each change shows a human-readable description of the change
+   - Each change shows a timestamp
+   - Each change has accept/reject buttons (non-functional at this point)
+8. Test UI scrolling with many changes (add 10+ test changes)
+9. Force-quit and restart the app
+10. Check if pending changes persist (if implemented)
+
+If the UI doesn't display correctly or changes don't appear as expected, save screenshots and full console logs for debugging.

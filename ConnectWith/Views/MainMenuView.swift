@@ -6,44 +6,8 @@ import Combine
 
 // MARK: - Calendar Event Models
 
-// Model for calendar events - one event per month
-class CalendarEventStore: ObservableObject {
-    static let shared = CalendarEventStore()
-    
-    // Published events array
-    @Published var events: [CalendarEvent] = []
-    
-    init() {
-        // Initialize with empty events for each month
-        for monthIndex in 1...12 {
-            let monthName = Calendar.current.monthSymbols[monthIndex - 1]
-            events.append(CalendarEvent(month: monthIndex, monthName: monthName))
-        }
-    }
-    
-    // Get event for a specific month
-    func getEvent(for month: Int) -> CalendarEvent {
-        return events[month - 1]
-    }
-    
-    // Update an event
-    func updateEvent(month: Int, title: String, location: String, day: Int) {
-        events[month - 1].title = title
-        events[month - 1].location = location
-        events[month - 1].day = day
-        events[month - 1].isScheduled = true
-        objectWillChange.send()
-    }
-}
-
-// Identifier for event form sheets
-struct EventFormIdentifier: Identifiable {
-    var id: Int { month }
-    let month: Int
-}
-
-// Model for a single calendar event
-struct CalendarEvent: Identifiable {
+// MARK: - Calendar Event Model
+struct CalendarEvent: Codable, Identifiable {
     var id: Int { month }
     let month: Int
     let monthName: String
@@ -51,6 +15,33 @@ struct CalendarEvent: Identifiable {
     var location: String = ""
     var day: Int = 1
     var isScheduled: Bool = false
+    
+    // Default initializer
+    init(month: Int, monthName: String, title: String = "", location: String = "", day: Int = 1, isScheduled: Bool = false) {
+        self.month = month
+        self.monthName = monthName
+        self.title = title
+        self.location = location
+        self.day = day
+        self.isScheduled = isScheduled
+    }
+    
+    // Custom initializer from decoder
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Decode required properties
+        month = try container.decode(Int.self, forKey: .month)
+        monthName = try container.decode(String.self, forKey: .monthName)
+        
+        // Decode optional properties with defaults
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        location = try container.decodeIfPresent(String.self, forKey: .location) ?? ""
+        day = try container.decodeIfPresent(Int.self, forKey: .day) ?? 1
+        isScheduled = try container.decodeIfPresent(Bool.self, forKey: .isScheduled) ?? false
+        
+        print("[CalendarEvent] Decoded event for \(monthName): title=\(title), day=\(day)")
+    }
     
     // Get the card colors for each month
     var cardColor: (Color, Color) {
@@ -79,6 +70,160 @@ struct CalendarEvent: Identifiable {
             endPoint: .bottomTrailing
         )
     }
+    
+    // Custom encode method
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(month, forKey: .month)
+        try container.encode(monthName, forKey: .monthName)
+        try container.encode(title, forKey: .title)
+        try container.encode(location, forKey: .location)
+        try container.encode(day, forKey: .day)
+        try container.encode(isScheduled, forKey: .isScheduled)
+    }
+    
+    // CodingKeys to exclude computed properties from encoding/decoding
+    enum CodingKeys: String, CodingKey {
+        case month, monthName, title, location, day, isScheduled
+    }
+}
+
+// MARK: - Calendar Event Store
+class CalendarStore: ObservableObject {
+    static let shared = CalendarStore()
+    
+    // Published events array
+    @Published var events: [CalendarEvent] = []
+    
+    // UserDefaults keys for individual events - we'll store each month separately
+    private func keyForMonth(_ month: Int) -> String {
+        return "CalendarEvent_Month_\(month)"
+    }
+    
+    init() {
+        print("[CalendarStore] Initializing CalendarStore")
+        
+        // First initialize with empty events for each month
+        for monthIndex in 1...12 {
+            let monthName = Calendar.current.monthSymbols[monthIndex - 1]
+            
+            // Create a basic event
+            let event = CalendarEvent(month: monthIndex, monthName: monthName)
+            
+            // Add it to our array
+            events.append(event)
+        }
+        
+        // Then load any saved events from UserDefaults
+        loadAllEvents()
+        
+        print("[CalendarStore] Initialization complete with \(events.count) total events")
+    }
+    
+    // Get event for a specific month
+    func getEvent(for month: Int) -> CalendarEvent {
+        return events[month - 1]
+    }
+    
+    // Update an event
+    func updateEvent(month: Int, title: String, location: String, day: Int) {
+        print("[CalendarStore] Saving event: \(title) for \(events[month - 1].monthName) on day \(day)")
+        
+        // Update the event in our array
+        events[month - 1].title = title
+        events[month - 1].location = location
+        events[month - 1].day = day
+        events[month - 1].isScheduled = true
+        
+        // Save this individual event to UserDefaults
+        saveEvent(month: month)
+        
+        // Notify observers
+        objectWillChange.send()
+        
+        print("[CalendarStore] Event saved successfully")
+    }
+    
+    // MARK: - Persistence - Individual Event Storage
+    
+    // Save a single month's event
+    private func saveEvent(month: Int) {
+        let event = events[month - 1]
+        
+        // Create a dictionary with the event data
+        let eventDict: [String: Any] = [
+            "title": event.title,
+            "location": event.location,
+            "day": event.day,
+            "isScheduled": event.isScheduled
+        ]
+        
+        // Save to UserDefaults
+        UserDefaults.standard.set(eventDict, forKey: keyForMonth(month))
+        UserDefaults.standard.synchronize()
+        
+        print("[CalendarStore] Saved event for \(event.monthName): \(event.title), day \(event.day)")
+    }
+    
+    // Load a single month's event
+    private func loadEvent(month: Int) {
+        // Get the event dictionary
+        guard let eventDict = UserDefaults.standard.dictionary(forKey: keyForMonth(month)) else {
+            print("[CalendarStore] No saved data for month \(month)")
+            return
+        }
+        
+        // Update our model
+        if let title = eventDict["title"] as? String,
+           let location = eventDict["location"] as? String,
+           let day = eventDict["day"] as? Int,
+           let isScheduled = eventDict["isScheduled"] as? Bool {
+            
+            events[month - 1].title = title
+            events[month - 1].location = location
+            events[month - 1].day = day
+            events[month - 1].isScheduled = isScheduled
+            
+            print("[CalendarStore] Loaded event for month \(month): \(title), day \(day)")
+        }
+    }
+    
+    // Load all events
+    private func loadAllEvents() {
+        print("[CalendarStore] Loading all saved events")
+        
+        var loadedCount = 0
+        
+        for month in 1...12 {
+            // Check if we have data for this month
+            if UserDefaults.standard.dictionary(forKey: keyForMonth(month)) != nil {
+                loadEvent(month: month)
+                loadedCount += 1
+            }
+        }
+        
+        print("[CalendarStore] Loaded \(loadedCount) events from storage")
+    }
+    
+    // Save all events
+    func saveAllEvents() {
+        print("[CalendarStore] Saving all events")
+        
+        for month in 1...12 {
+            if events[month - 1].isScheduled {
+                saveEvent(month: month)
+            }
+        }
+    }
+}
+
+// MARK: - Event Form Models
+
+// Identifier for event form sheets
+struct EventFormIdentifier: Identifiable {
+    var id: Int { month }
+    let month: Int
 }
 
 // Next View for showing selected devices and confirming completion
@@ -445,7 +590,7 @@ struct SavedDeviceRow: View {
 
 // Calendar View with monthly event cards
 struct CalendarView: View {
-    @ObservedObject private var eventStore = CalendarEventStore.shared
+    @ObservedObject private var eventStore = CalendarStore.shared
     @State private var selectedMonth: Int = 1
     @State private var isShowingEventForm = false
     
@@ -575,7 +720,7 @@ struct MonthCard: View {
 // Form for adding/editing an event
 struct EventFormView: View {
     let month: Int
-    @ObservedObject private var eventStore = CalendarEventStore.shared
+    @ObservedObject private var eventStore = CalendarStore.shared
     @Environment(\.presentationMode) var presentationMode
     
     // Get the current event for this month
@@ -591,7 +736,7 @@ struct EventFormView: View {
     // Initialize with proper values from the start
     init(month: Int) {
         self.month = month
-        let event = CalendarEventStore.shared.getEvent(for: month)
+        let event = CalendarStore.shared.getEvent(for: month)
         
         // Use existing values or defaults
         if event.isScheduled {
@@ -658,14 +803,43 @@ struct EventFormView: View {
     }
     
     private func saveEvent() {
+        print("[CalendarStore] EventFormView saving event: \(title) for month \(month) on day \(day)")
+        
+        // Call updateEvent to save the changes
         eventStore.updateEvent(month: month, title: title, location: location, day: day)
+        
+        // Force save - belt and suspenders approach
+        eventStore.saveAllEvents()
+        
+        // Force UserDefaults to synchronize as a safety measure
+        UserDefaults.standard.synchronize()
+        
+        // Verify the event was saved by reading it back
+        let updatedEvent = eventStore.getEvent(for: month)
+        print("[CalendarStore] Verification - Event after save: \(updatedEvent.title) on day \(updatedEvent.day)")
+        
+        // Verify the data is in UserDefaults
+        if let dict = UserDefaults.standard.dictionary(forKey: "CalendarEvent_Month_\(month)"),
+           let savedDay = dict["day"] as? Int {
+            print("[CalendarStore] Verified event data in UserDefaults for month \(month), day: \(savedDay)")
+        } else {
+            print("[CalendarStore] WARNING: Could not verify event data in UserDefaults for month \(month)")
+        }
+        
+        // Manually trigger a UI refresh (just in case)
+        DispatchQueue.main.async {
+            // Trigger the event store to notify observers
+            eventStore.objectWillChange.send()
+        }
+        
+        // Dismiss the form
         presentationMode.wrappedValue.dismiss()
     }
 }
 
 // Settings View with sample event generator
 struct SettingsView: View {
-    @ObservedObject private var eventStore = CalendarEventStore.shared
+    @ObservedObject private var eventStore = CalendarStore.shared
     @State private var showAlert = false
     
     var body: some View {
@@ -778,6 +952,8 @@ struct SettingsView: View {
             ["Mountain Cabin", "Living Room", "Bakery", "Downtown"]                                // December
         ]
         
+        print("[CalendarStore] Generating sample events for all months")
+        
         // Populate each month with a random event from options
         for month in 1...12 {
             // Get random title and location from options for this month
@@ -811,6 +987,22 @@ struct SettingsView: View {
                 location: locations[randomLocationIndex],
                 day: randomDay
             )
+            
+            // Ensure the event is marked as scheduled
+            eventStore.events[month - 1].isScheduled = true
+        }
+        
+        // Make sure all events are saved
+        eventStore.saveAllEvents()
+        
+        // Force UserDefaults to save
+        UserDefaults.standard.synchronize()
+        
+        // Verify events were saved
+        print("[CalendarStore] Verifying sample events were saved:")
+        for month in 1...12 {
+            let event = eventStore.getEvent(for: month)
+            print("[CalendarStore] Month \(month): \(event.title) on day \(event.day)")
         }
         
         // Show confirmation alert

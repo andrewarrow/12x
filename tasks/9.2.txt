@@ -1,0 +1,33 @@
+Add sync button UI to connected family members:
+
+1. Update the Family tab to add a "Sync" button for family members with "connected" status
+2. Ensure the button is disabled/hidden for devices with "new" or "error" status
+3. Create a modal dialog that appears when sync is initiated
+4. Add basic UI elements to the modal: progress indicator, status text area, and cancel button
+5. Include scaffolding UI to show connection status and bytes transferred (just UI, no actual data transfer yet)
+6. Create placeholder functions that will later handle the actual synchronization
+7. Add comprehensive debug logging with "[SyncUI]" prefix for all UI state changes
+
+Debug Logging Requirements:
+- Log device status changes: "[SyncUI] Device {name} status changed to {status}"
+- Log sync button interactions: "[SyncUI] Sync button tapped for device {name} ({id})"
+- Log modal presentation: "[SyncUI] Presenting sync modal for device {name}"
+- Log modal dismissal: "[SyncUI] Sync modal dismissed for device {name}, reason: {reason}"
+- Log all button interactions within the modal dialog
+- Log any state changes in the sync UI components
+
+Testing Instructions (Two Phones):
+1. Install the app on two phones (Phone A and Phone B)
+2. On both phones, complete the onboarding process and navigate to the Family tab
+3. On both phones, ensure devices are discovered and connected
+4. Check Xcode console on both phones for device status logs
+5. Verify Phone A shows Phone B with "connected" status and a "Sync" button
+6. Verify Phone B shows Phone A with "connected" status and a "Sync" button
+7. On Phone A, tap the Sync button for Phone B
+8. Check Xcode console for sync button tap logs
+9. Verify the sync modal appears with progress indicator at 0%
+10. Test the cancel button to dismiss the modal
+11. Check logs to confirm modal dismissal was logged
+12. Repeat steps 7-11 with Phone B initiating sync with Phone A
+
+If any UI elements don't appear correctly or any expected logs are missing, copy all console logs for that device and save them for debugging.

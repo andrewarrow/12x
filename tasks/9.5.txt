@@ -1,0 +1,45 @@
+Connect sync UI to Bluetooth transfer mechanism:
+
+1. Integrate BluetoothTransferManager with the sync modal UI
+2. Update the progress indicator based on transfer progress
+3. Display real-time statistics (bytes sent/received) during sync
+4. Implement cancel functionality to abort transfers
+5. Add proper error handling and user feedback for sync issues
+6. Create a completion handler for successful transfers
+7. Add detailed logging with "[SyncProcess]" prefix for all UI/transfer integration points
+
+Debug Logging Requirements:
+- Log UI-Transfer connection: "[SyncProcess] Sync modal connected to transfer manager for device: {name}"
+- Log UI updates: "[SyncProcess] Updating UI with progress: {percent}%, bytes: {sent}/{total}"
+- Log user actions: "[SyncProcess] User pressed cancel button, aborting transfer"
+- Log transfer state transitions: "[SyncProcess] Transfer state changed: {oldState} -> {newState}"
+- Log error display: "[SyncProcess] Showing error to user: {errorMessage}"
+- Log completion handling: "[SyncProcess] Transfer completed, showing success state"
+- Log transfer statistics: "[SyncProcess] Final transfer stats - Total bytes: {bytes}, time: {seconds}s, speed: {kbps}kB/s"
+
+Testing Instructions (Two Phones):
+1. Build and run the app on both phones
+2. Create multiple calendar events on Phone A (at least 5 events)
+3. Connect both phones and navigate to the Family tab
+4. On Phone A, tap the "Sync" button for Phone B
+5. Observe the sync modal with real-time progress updates:
+   - Progress bar should advance smoothly
+   - Bytes transferred should update in real-time
+   - Transfer speed should be displayed
+6. Verify completion:
+   - Progress should reach 100%
+   - Success message should appear
+   - Detailed transfer stats should be shown
+7. Check Phone A's console logs for all progress updates
+8. Check Phone B's console logs for all received chunk logs
+9. Test cancellation:
+   - Start another sync
+   - Press cancel button mid-transfer
+   - Verify transfer stops immediately
+   - Check logs for cancellation messages
+10. Test error handling:
+    - Start sync, then put one phone in airplane mode
+    - Verify error message appears on UI
+    - Check logs for detailed error information
+
+If any part of the process fails, capture screenshots of the UI state and save complete console logs from both devices.

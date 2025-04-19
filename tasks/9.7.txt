@@ -1,0 +1,45 @@
+Process received sync data into pending changes:
+
+1. Create a SyncProcessor class to handle received sync data
+2. Implement logic to compare received calendar events with local events
+3. Generate human-readable descriptions of changes (e.g., "Bob would like to change the date of Ski Trip in May to the 19th")
+4. Store pending changes in PendingChangesStore
+5. Add notifications when new updates are available
+6. Create a delegate protocol to inform UI of new pending changes
+7. Add comprehensive logging with "[SyncProcessor]" prefix for all processing operations
+8. Ensure the Updates tab reflects new changes immediately
+
+Debug Logging Requirements:
+- Log processing start: "[SyncProcessor] Processing sync data from device {name}, {bytes} bytes"
+- Log detected changes: "[SyncProcessor] Found {count} changes compared to local calendar"
+- Log each specific change with details: "[SyncProcessor] Change detected: {changeType} for event {title} in {month}"
+- Log human-readable descriptions: "[SyncProcessor] Generated description: {description}"
+- Log notification triggering: "[SyncProcessor] Triggering UI notification for {count} new changes"
+- Log delegate calls: "[SyncProcessor] Called delegate method didProcessNewChanges with {count} changes"
+- Log any errors during processing: "[SyncProcessor] Error while processing sync data: {error}"
+- Log final stats: "[SyncProcessor] Processing complete: {addedCount} new, {modifiedCount} modified, {unchangedCount} unchanged"
+
+Testing Instructions (Two Phones):
+1. Build and run the app on both phones
+2. Create different calendar events on each phone:
+   - On Phone A: Create events for January, March, and May
+   - On Phone B: Create events for February, March (different details), and June
+3. Navigate to the Family tab on Phone A
+4. Initiate sync with Phone B
+5. Check Phone A's console logs to verify:
+   - Successful data transmission
+   - Transfer completion
+6. On Phone B, check console logs to verify:
+   - Successful reception of sync data
+   - Processing of received data
+   - Detection of differences between received and local events
+   - Generation of human-readable descriptions
+   - Addition of pending changes to the store
+7. Navigate to the Updates tab on Phone B
+8. Verify the Updates tab now shows pending changes from Phone A:
+   - New events (January and May) should appear as "Bob would like to add a new event: {title} in January"
+   - Modified event (March) should appear as "Bob would like to change {what changed} of {title} in March"
+9. Repeat the process in reverse direction (Phone B syncs to Phone A)
+10. Check Phone A's Updates tab for the changes from Phone B
+
+If changes don't appear correctly in the Updates tab or descriptions aren't clear, save screenshots and full console logs for debugging.

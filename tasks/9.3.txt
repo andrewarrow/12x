@@ -1,0 +1,37 @@
+Create data models and JSON serialization for sync:
+
+1. Create a SyncPackage model to represent data exchanged between devices
+2. Define the structure for calendar event changes in the sync package
+3. Implement JSON encoding/decoding for all sync models
+4. Add versioning to the sync format to support future changes
+5. Create utility functions to convert between calendar events and sync data
+6. Implement functions to generate sync data from local calendar events
+7. Add comprehensive debug logging using "[SyncData]" prefix for all data operations
+8. Add unit tests for serialization/deserialization
+
+Debug Logging Requirements:
+- Log sync package creation: "[SyncData] Creating sync package, version: {version}, events count: {count}"
+- Log JSON serialization: "[SyncData] Serializing sync package to JSON, byte size: {size}"
+- Log JSON deserialization: "[SyncData] Deserializing JSON to sync package, version: {version}"
+- Print full JSON content in a readable format for debugging: "[SyncData] JSON content: {json}"
+- Log any conversion errors with detailed error information
+- Log model validation results: "[SyncData] Validating sync package: {isValid}"
+
+Testing Instructions (Two Phones):
+1. Build and run the app on both phones
+2. Create at least 3 different calendar events on Phone A
+3. In Xcode, add a temporary debug button to the UI that triggers test serialization
+4. On Phone A, tap the debug button and check the console logs
+5. Verify logs show successful serialization with proper event count
+6. Verify the full JSON appears in the logs and is correctly formatted
+7. Manually copy the JSON output from Phone A's console
+8. In Xcode, add a temporary debug button on Phone B to test deserialization
+9. Paste the JSON from Phone A into Phone B's test code
+10. Run Phone B's deserialization test and check console logs
+11. Verify logs show successful deserialization with correct event count and data
+
+Additional Test:
+12. Intentionally modify the JSON to be invalid and test error handling
+13. Check logs show appropriate validation errors
+
+If any serialization/deserialization issues occur, save the full JSON content along with all console logs for debugging.

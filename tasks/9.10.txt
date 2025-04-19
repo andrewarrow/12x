@@ -1,0 +1,58 @@
+Polish, optimize and fix edge cases:
+
+1. Add reliability improvements to handle intermittent Bluetooth connections
+2. Implement retry logic for failed transfers
+3. Add conflict resolution for simultaneous edits to the same event
+4. Optimize Bluetooth packet size for better transfer performance
+5. Add battery usage optimizations for sync operations
+6. Create a sync history log in Settings tab
+7. Implement automatic background sync when devices reconnect
+8. Add user preferences for sync behavior in Settings
+9. Add comprehensive logging with "[SyncSystem]" prefix for all system-level operations
+
+Debug Logging Requirements:
+- Log all sync attempts: "[SyncSystem] Sync attempt with device: {name}, mode: {manual/auto}"
+- Log retry operations: "[SyncSystem] Retry attempt {number}/{max} for failed transfer with device: {name}"
+- Log packet size optimizations: "[SyncSystem] Optimized packet size to {bytes} bytes based on connection quality"
+- Log conflict detection: "[SyncSystem] Conflict detected for event in {month}, local timestamp: {local}, remote timestamp: {remote}"
+- Log conflict resolution: "[SyncSystem] Resolved conflict for {month} event using strategy: {strategy}"
+- Log background operations: "[SyncSystem] Background sync triggered by reconnection with device: {name}"
+- Log battery optimizations: "[SyncSystem] Deferring sync due to low battery: {level}%"
+- Log all user preference changes: "[SyncSystem] User changed sync preference: {preference} to {value}"
+- Log detailed performance metrics: "[SyncSystem] Sync performance: {kbps}kB/s, packet loss: {lossRate}%, retries: {retryCount}"
+
+Testing Instructions (Two+ Phones):
+1. Build and run the app on at least two phones
+2. Configure test scenarios to verify each optimization:
+
+For reliability testing:
+   - Test sync while walking away from the other device (testing distance limits)
+   - Test sync in areas with Bluetooth interference
+   - Verify retry logic works by briefly turning Bluetooth off/on
+   - Check logs for retry attempts and successful recovery
+
+For conflict resolution:
+   - Create identical events on both phones for the same month
+   - Edit different aspects of the event on each phone
+   - Perform bi-directional sync
+   - Verify conflict detection in logs
+   - Check that conflict is resolved according to configured strategy
+   - Verify event data is consistent after resolution
+
+For performance optimization:
+   - Test sync with various sized calendars (5, 10, 20+ events)
+   - Compare transfer speeds with previous implementations
+   - Verify logs show packet size optimization
+
+For background sync:
+   - Setup devices to be connected
+   - Force quit the app on one device
+   - Relaunch and verify automatic sync occurs
+   - Check logs for background sync trigger
+
+For settings and preferences:
+   - Test each new preference option in Settings
+   - Verify behavior changes according to selected preferences
+   - Check sync history log shows accurate information about past syncs
+
+For all tests, capture detailed logs with timestamps to evaluate performance metrics and identify any issues that need further optimization.

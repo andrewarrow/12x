@@ -1,0 +1,52 @@
+Implement bi-directional sync between devices:
+
+1. Modify the sync process to support sending and receiving in one session
+2. Create a SyncSession class to manage the full bi-directional exchange
+3. Implement protocol for negotiating send/receive order between devices
+4. Add progress reporting for both sending and receiving phases
+5. Create UI to show overall sync progress across both phases
+6. Handle connection drops during the bi-directional process
+7. Add comprehensive logging with "[BiSync]" prefix for all bi-directional sync operations
+8. Ensure sync modal updates appropriately during each phase
+
+Debug Logging Requirements:
+- Log session start: "[BiSync] Starting bi-directional sync session with device: {name}"
+- Log negotiation: "[BiSync] Negotiating sync protocol, initiator: {isInitiator}"
+- Log phase transitions: "[BiSync] Transition to phase: {phase} ({phaseNumber}/2)"
+- Log direction changes: "[BiSync] Changing sync direction: now {sending/receiving}"
+- Log progress for both phases: "[BiSync] Overall progress: {percent}%, Phase: {currentPhase}"
+- Log connection issues: "[BiSync] Connection interrupted during sync, state: {state}"
+- Log recovery attempts: "[BiSync] Attempting to recover sync session, attempt: {attemptNumber}"
+- Log session completion: "[BiSync] Bi-directional sync completed, total bytes: {sentBytes}/{receivedBytes}"
+- Log any errors with complete details: "[BiSync] Error during bi-directional sync: {error}"
+
+Testing Instructions (Two Phones):
+1. Build and run the app on both phones
+2. Create different calendar events on each phone:
+   - On Phone A: Create events for January, March, and May
+   - On Phone B: Create events for February, April, and June
+3. Navigate to the Family tab on Phone A
+4. Initiate sync with Phone B
+5. Observe the sync modal UI during the process:
+   - It should clearly indicate the current phase (e.g., "Sending data..." then "Receiving data...")
+   - Progress indicator should update for each phase
+   - Total progress should reflect overall completion across both phases
+6. When sync completes:
+   - Check Phone A's console logs for detailed session information
+   - Check Phone B's console logs for the same
+7. Navigate to the Updates tab on both phones:
+   - Phone A should have pending changes for February, April, and June
+   - Phone B should have pending changes for January, March, and May
+8. Test error recovery:
+   - Start another sync session
+   - During sync, briefly enable airplane mode on one phone
+   - Disable airplane mode within 10 seconds
+   - Verify the sync recovers and completes successfully
+   - Check logs for recovery attempts
+9. Test prolonged disconnection:
+   - Start another sync session
+   - During sync, enable airplane mode for >30 seconds
+   - Verify appropriate error handling and session termination
+   - Check logs for error details
+
+If the bi-directional sync doesn't complete successfully or if changes don't appear correctly on both devices, save complete console logs from both devices for debugging.

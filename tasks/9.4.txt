@@ -1,0 +1,42 @@
+Implement basic Bluetooth data transfer mechanism:
+
+1. Create a BluetoothTransferManager class to handle data exchange
+2. Add a new characteristic for sync data to the existing Bluetooth service
+3. Implement methods to send chunks of JSON data via Bluetooth
+4. Create receiver code to handle and reassemble incoming data chunks
+5. Add progress tracking for both sending and receiving operations
+6. Implement proper error handling for transfer failures
+7. Add detailed logging with "[BTTransfer]" prefix for all Bluetooth transfer operations
+
+Debug Logging Requirements:
+- Log transfer initialization: "[BTTransfer] Starting transfer to device {name}, data size: {bytes}"
+- Log chunk transmission: "[BTTransfer] Sending chunk {current}/{total}, size: {bytes}"
+- Log chunk reception: "[BTTransfer] Received chunk {current}/{total}, size: {bytes}"
+- Log progress updates: "[BTTransfer] Transfer progress: {percent}%"
+- Log any transfer errors with full error details: "[BTTransfer] Error during transfer: {error}"
+- Log transfer completion: "[BTTransfer] Transfer completed, total bytes: {bytes}, time: {seconds}s"
+- Log all characteristic discoveries and subscriptions: "[BTTransfer] Found sync characteristic: {uuid}"
+
+Testing Instructions (Two Phones):
+1. Build and run the app on both phones
+2. Connect both phones through the Family tab (ensure status shows "connected")
+3. Add a temporary debug UI with two buttons:
+   - "Send Test Data": Sends a small predefined JSON string
+   - "Transfer Status": Shows current transfer stats
+4. On Phone A, tap "Send Test Data" to initiate a test transfer to Phone B
+5. Check Phone A's console logs for:
+   - Initialization of transfer
+   - Chunk transmission logs
+   - Progress updates
+   - Completion log
+6. Check Phone B's console logs for:
+   - Reception of data chunks
+   - Reassembly of complete data
+   - Validation of received data
+7. Repeat the test sending data from Phone B to Phone A
+8. Test error handling by:
+   - Starting a transfer and turning off Bluetooth on the receiver
+   - Putting one device in airplane mode during transfer
+   - Moving devices far apart during transfer
+
+For each test, capture detailed logs from both sending and receiving devices and save them for debugging if any issues occur.

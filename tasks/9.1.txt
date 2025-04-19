@@ -1,0 +1,28 @@
+Implement local storage for calendar events:
+
+1. Create a CalendarStore class to manage persistent storage of calendar events
+2. Implement functions to save and load calendar events using UserDefaults
+3. Add model classes for CalendarEvent with properties for title, location, and day
+4. Modify existing calendar view to load data from storage on app launch
+5. Update the calendar edit functionality to save changes to persistent storage
+6. Add detailed debug logging with "[CalendarStore]" prefix for all storage operations
+
+Debug Logging Requirements:
+- Log when CalendarStore initializes and loads saved events
+- Log each save operation with event details: "[CalendarStore] Saving event: {title} for {month} on day {day}"
+- Log when events are retrieved: "[CalendarStore] Loading events from storage, found {count} events"
+- Log any errors during save/load operations with clear error messages
+
+Testing Instructions (Single Phone):
+1. Build and run the app on your device
+2. Go to the Calendar tab
+3. Add events for at least 3 different months with unique titles and days
+4. Check the Xcode console for save operation logs
+5. Force-quit the app completely
+6. Relaunch the app and immediately check Xcode console for load operation logs
+7. Verify all 3 events appear correctly in the Calendar tab
+8. Edit one of the existing events, changing title and day
+9. Check console logs show the update operation
+10. Force-quit and relaunch again to verify changes persist
+
+If any step fails, copy the complete Xcode console logs from that session and save them for debugging.

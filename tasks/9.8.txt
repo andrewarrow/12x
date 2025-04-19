@@ -1,0 +1,51 @@
+Implement accept/reject functionality for pending changes:
+
+1. Add working accept and reject buttons to each pending change item
+2. Implement logic to apply accepted changes to the local calendar
+3. Create functionality to dismiss rejected changes
+4. Update CalendarStore when changes are accepted
+5. Add visual feedback for accept/reject actions
+6. Implement undo functionality for recent accept/reject actions
+7. Add detailed logging with "[ChangeAction]" prefix for all accept/reject operations
+8. Update the calendar UI immediately when changes are accepted
+
+Debug Logging Requirements:
+- Log action initiation: "[ChangeAction] User {accepted/rejected} change: {changeDescription}"
+- Log change application: "[ChangeAction] Applying change to local calendar: {details}"
+- Log CalendarStore updates: "[ChangeAction] Updating CalendarStore with accepted change for {month}"
+- Log undo history: "[ChangeAction] Adding action to undo history: {actionType} for {changeId}"
+- Log UI updates: "[ChangeAction] Updating UI after accepting change: {changeId}"
+- Log rejected change removal: "[ChangeAction] Removing rejected change: {changeId}"
+- Log undo actions: "[ChangeAction] User triggered undo for recent {actionType}"
+- Log error handling: "[ChangeAction] Error while applying change: {error}"
+
+Testing Instructions (Two Phones):
+1. Build and run the app on both phones
+2. Create different calendar events on each phone:
+   - On Phone A: Create events for January, March, and May
+   - On Phone B: Create events for February, April, and June
+3. Sync from Phone A to Phone B to generate pending changes
+4. On Phone B, navigate to the Updates tab
+5. Accept the change for January:
+   - Tap the accept button for the January event change
+   - Check console logs for accept action and CalendarStore update
+   - Navigate to Calendar tab and verify the January event appears correctly
+6. Reject the change for May:
+   - Tap the reject button for the May event change
+   - Check console logs for reject action
+   - Verify the change disappears from the Updates tab
+   - Navigate to Calendar tab and verify no May event was added
+7. Test undo functionality:
+   - Return to Updates tab
+   - Locate the undo button for the most recent action
+   - Tap undo for the rejected May change
+   - Verify the change reappears in the Updates tab
+   - Tap undo for the accepted January change
+   - Verify the January event is removed from the calendar
+8. Repeat the process from Phone B to Phone A with different events
+9. Test edge cases:
+   - Accept multiple changes simultaneously (if UI supports this)
+   - Make local changes to events, then accept conflicting remote changes
+   - Force quit the app after accepting but before navigating away
+
+If any accept/reject actions don't work as expected or if the calendar doesn't update correctly, save screenshots and full console logs for debugging.
