@@ -85,6 +85,8 @@
 				38A1B8E02AC0D83A00EB14A5 /* SplashScreen.swift */,
 				38A1B8E22AC0D84700EB14A5 /* MainMenuView.swift */,
 				38A1B8E42AC0D85400EB14A5 /* MenuButton.swift */,
+				F3E9A1002BAF9A0100E5D6B1 /* BluetoothManager.swift */,
+				F3E9A1022BAF9A1100E5D6B1 /* DeviceStore.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -163,6 +165,8 @@
 				38A1B8E52AC0D85400EB14A5 /* MenuButton.swift in Sources */,
 				38A1B8D02AC0D7B500EB14A5 /* ConnectWithApp.swift in Sources */,
 				38A1B8E12AC0D83A00EB14A5 /* SplashScreen.swift in Sources */,
+				F3E9A1012BAF9A0100E5D6B1 /* BluetoothManager.swift in Sources */,
+				F3E9A1032BAF9A1100E5D6B1 /* DeviceStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
