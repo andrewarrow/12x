@@ -1,0 +1,18 @@
+It's time to store the calendar data to disk. When the user quits the app
+and re-enters all their calendar data should still be there.
+
+Also let's start on the feature to sync your calendar data to a family
+member over bluetooth. In the Family tab add a new option for "sync"
+on each family member only for "connected" ones.
+
+So "new" or "error" status one will not have this option yet.
+
+When you select sync open a modal showing detailed information
+about the process. Show stuff like how the bluetooth communication
+is going in terms of bytes in or bytes out, and also show
+enlgish of stuff like "Andrew has a May event on the 17th for Disneyland
+but Bob does not, sending that over."
+And also "Bob and Andrew both have an event for June but Bob wants the 7th
+and Andrew wants the 17th. Breaking the tie."
+
+Use the date of the change to break the tie. The newest edit wins.
