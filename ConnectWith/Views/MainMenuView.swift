@@ -1095,16 +1095,20 @@ struct SyncModalView: View {
                     
                     Spacer()
                     
-                    // Cancel button
+                    // Cancel/Done button (changes when sync completes)
                     Button(action: {
-                        print("[SyncUI] Sync cancelled by user for device \(deviceInfo.displayName)")
+                        if syncProgress >= 1.0 {
+                            print("[SyncUI] Sync completed and dismissed for device \(deviceInfo.displayName)")
+                        } else {
+                            print("[SyncUI] Sync cancelled by user for device \(deviceInfo.displayName)")
+                        }
                         onDismiss()
                     }) {
-                        Text("Cancel")
+                        Text(syncProgress >= 1.0 ? "Done" : "Cancel")
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.gray.opacity(0.2))
-                            .foregroundColor(.primary)
+                            .background(syncProgress >= 1.0 ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
+                            .foregroundColor(syncProgress >= 1.0 ? .green : .primary)
                             .cornerRadius(10)
                     }
                     .padding(.horizontal)
@@ -1115,10 +1119,13 @@ struct SyncModalView: View {
             .navigationTitle("Calendar Sync")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        print("[SyncUI] Sync modal dismissed for device \(deviceInfo.displayName), reason: user tapped done")
-                        onDismiss()
+                // Only show the Done button in the toolbar while in progress
+                if syncProgress < 1.0 {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            print("[SyncUI] Sync modal dismissed for device \(deviceInfo.displayName), reason: user tapped done")
+                            onDismiss()
+                        }
                     }
                 }
             }
@@ -1127,6 +1134,12 @@ struct SyncModalView: View {
             }
             .onReceive(timer) { _ in
                 updateSyncSimulation()
+            }
+            .onChange(of: syncProgress) { newValue in
+                // Stop animation when sync reaches 100%
+                if newValue >= 1.0 {
+                    isAnimating = false
+                }
             }
             .onDisappear {
                 isAnimating = false
