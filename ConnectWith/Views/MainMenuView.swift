@@ -478,11 +478,14 @@ struct SelectDevicesView: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal)
                 
+                // Direct navigation to MainTabView, bypassing the "Setup Complete" screen
                 NavigationLink(
-                    destination: NextView(selectedDevices: selectedDevices, bluetoothManager: bluetoothManager),
+                    destination: MainTabView(bluetoothManager: bluetoothManager),
                     isActive: $showNextScreen
                 ) {
                     Button(action: {
+                        // Save selected devices before navigating
+                        DeviceStore.shared.saveDevices(identifiers: selectedDevices)
                         showNextScreen = true
                     }) {
                         Text("Next")
