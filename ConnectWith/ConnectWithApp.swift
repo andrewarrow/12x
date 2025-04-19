@@ -18,6 +18,8 @@ let _logStartup: () = {
 @main
 struct ConnectWithApp: App {
     @State private var isShowingSplash = true
+    @State private var hasCompletedOnboarding = false
+    @StateObject private var bluetoothManager = BluetoothManager()
     
     init() {
         // IMPORTANT: Directly set permission descriptions
@@ -62,6 +64,15 @@ struct ConnectWithApp: App {
                     SplashScreen(isShowingSplash: $isShowingSplash)
                         .onAppear {
                             print("SplashScreen appeared")
+                            // Check if user has completed onboarding
+                            hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "HasCompletedOnboarding")
+                            print("Has completed onboarding: \(hasCompletedOnboarding)")
+                        }
+                } else if hasCompletedOnboarding {
+                    // Skip onboarding and go directly to the main tab view
+                    MainTabView(bluetoothManager: bluetoothManager)
+                        .onAppear {
+                            print("MainTabView appeared (skipped onboarding)")
                         }
                 } else {
                     OnboardingView()

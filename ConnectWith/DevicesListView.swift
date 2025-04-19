@@ -47,7 +47,53 @@ struct DevicesListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
+                    // First ensure we stop any existing scanning to reset state
+                    bluetoothManager.stopScanning()
+                    
+                    // Create a state indicator for UI feedback
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                    impactFeedback.impactOccurred()
+                    
+                    print("Refresh: Starting new device scan...")
+                    
+                    // Start scanning with fresh state
                     bluetoothManager.startScanning()
+                    
+                    // Save initial device count to detect new devices
+                    let initialSavedCount = deviceStore.getAllSavedDevices().count
+                    let initialDiscoveredCount = deviceStore.getAllDevices().count
+                    
+                    // Process the results after a reasonable scan period
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                        // Stop scanning after our timeout
+                        bluetoothManager.stopScanning()
+                        
+                        // Get all devices from the updated device store
+                        let allDevices = deviceStore.getAllDevices()
+                        let savedIdentifierSet = Set(deviceStore.getAllSavedDevices().map { $0.identifier })
+                        
+                        print("Refresh: Found \(allDevices.count) total devices, \(initialDiscoveredCount) were already known")
+                        
+                        // Identify new devices that aren't already saved
+                        var newDevicesAdded = 0
+                        
+                        for device in allDevices {
+                            if !savedIdentifierSet.contains(device.identifier) {
+                                print("Refresh: Found new device \(device.displayName) with ID \(device.identifier)")
+                                // Add as a new device
+                                deviceStore.saveDevice(identifier: device.identifier)
+                                newDevicesAdded += 1
+                            }
+                        }
+                        
+                        // Verify by comparing saved count 
+                        let finalSavedCount = deviceStore.getAllSavedDevices().count
+                        print("Refresh: Added \(newDevicesAdded) new devices. Initial saved: \(initialSavedCount), Final saved: \(finalSavedCount)")
+                        
+                        // Provide haptic feedback on completion
+                        let completionFeedback = UINotificationFeedbackGenerator()
+                        completionFeedback.notificationOccurred(newDevicesAdded > 0 ? .success : .warning)
+                    }
                 }) {
                     Image(systemName: "arrow.clockwise")
                 }
