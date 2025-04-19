@@ -36,6 +36,12 @@ class CalendarEventStore: ObservableObject {
     }
 }
 
+// Identifier for event form sheets
+struct EventFormIdentifier: Identifiable {
+    var id: Int { month }
+    let month: Int
+}
+
 // Model for a single calendar event
 struct CalendarEvent: Identifiable {
     var id: Int { month }
@@ -440,7 +446,7 @@ struct SavedDeviceRow: View {
 // Calendar View with monthly event cards
 struct CalendarView: View {
     @ObservedObject private var eventStore = CalendarEventStore.shared
-    @State private var selectedMonth: Int? = nil
+    @State private var selectedMonth: Int = 1
     @State private var isShowingEventForm = false
     
     var body: some View {
@@ -482,12 +488,13 @@ struct CalendarView: View {
                 }
             }
             .navigationTitle("Calendar")
-            .sheet(isPresented: $isShowingEventForm, onDismiss: {
-                selectedMonth = nil
-            }) {
-                if let month = selectedMonth {
-                    EventFormView(month: month)
+            .sheet(item: Binding<EventFormIdentifier?>(
+                get: { isShowingEventForm ? EventFormIdentifier(month: selectedMonth) : nil },
+                set: { newValue in
+                    isShowingEventForm = newValue != nil
                 }
+            )) { identifier in
+                EventFormView(month: identifier.month)
             }
         }
     }
@@ -576,10 +583,27 @@ struct EventFormView: View {
         eventStore.getEvent(for: month)
     }
     
-    // Form fields
-    @State private var title: String = ""
-    @State private var location: String = ""
-    @State private var day: Int = 1
+    // Form fields with initial values directly from the current event
+    @State private var title: String
+    @State private var location: String
+    @State private var day: Int
+    
+    // Initialize with proper values from the start
+    init(month: Int) {
+        self.month = month
+        let event = CalendarEventStore.shared.getEvent(for: month)
+        
+        // Use existing values or defaults
+        if event.isScheduled {
+            _title = State(initialValue: event.title)
+            _location = State(initialValue: event.location)
+            _day = State(initialValue: event.day)
+        } else {
+            _title = State(initialValue: "")
+            _location = State(initialValue: "")
+            _day = State(initialValue: 1)
+        }
+    }
     
     // Maximum day for the selected month
     private var maxDay: Int {
@@ -623,14 +647,6 @@ struct EventFormView: View {
                 }
             }
             .navigationTitle("\(currentEvent.monthName) Event")
-            .onAppear {
-                // Initialize form with existing values if available
-                if currentEvent.isScheduled {
-                    title = currentEvent.title
-                    location = currentEvent.location
-                    day = currentEvent.day
-                }
-            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") {
