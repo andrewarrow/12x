@@ -87,7 +87,32 @@ class DeviceStore: ObservableObject {
         queue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             
-            // Update existing device if it exists
+            // Check if we already have a device with the same name (potential duplicate with different ID)
+            let matchingNameDevices = self.devices.values.filter { $0.displayName == name }
+            
+            if !matchingNameDevices.isEmpty {
+                print("DEBUG: Found \(matchingNameDevices.count) existing devices with name '\(name)'")
+                
+                // We have devices with the same name, check if this is likely a duplicate
+                if var existingDevice = matchingNameDevices.first {
+                    // Use the existing device's identifier instead
+                    print("DEBUG: Using existing device ID \(existingDevice.identifier) instead of \(identifier)")
+                    existingDevice.rssi = rssi
+                    existingDevice.lastSeen = Date()
+                    self.devices[existingDevice.identifier] = existingDevice
+                    
+                    // Don't continue - we've already updated the existing device
+                    
+                    // Notify observers that the device list has changed
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.deviceListVersion += 1
+                    }
+                    return
+                }
+            }
+            
+            // Normal flow - update existing device if it exists
             if var existingDevice = self.devices[identifier] {
                 existingDevice.name = name
                 existingDevice.rssi = rssi
