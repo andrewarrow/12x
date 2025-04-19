@@ -49,18 +49,18 @@ struct CalendarEvent: Identifiable {
     // Get the card colors for each month
     var cardColor: (Color, Color) {
         let colors: [(Color, Color)] = [
-            (.blue, .cyan),              // January
-            (.pink, .purple),            // February
-            (.green, .mint),             // March
-            (.yellow, .orange),          // April
-            (.purple, .indigo),          // May
-            (.red, .pink),               // June
-            (.indigo, .blue),            // July
-            (.orange, .yellow),          // August
-            (.mint, .green),             // September
-            (.cyan, .teal),              // October
-            (.brown, .orange),           // November
-            (.pink, .red)                // December
+            (Color.blue.opacity(0.7), Color.cyan.opacity(0.7)),                // January
+            (Color.pink.opacity(0.6), Color.purple.opacity(0.7)),              // February
+            (Color.green.opacity(0.6), Color.mint.opacity(0.6)),               // March
+            (Color.indigo.opacity(0.6), Color.blue.opacity(0.7)),              // April
+            (Color.purple.opacity(0.6), Color.indigo.opacity(0.7)),            // May
+            (Color.red.opacity(0.6), Color.pink.opacity(0.6)),                 // June
+            (Color.blue.opacity(0.6), Color.indigo.opacity(0.7)),              // July
+            (Color.purple.opacity(0.6), Color.pink.opacity(0.6)),              // August
+            (Color.mint.opacity(0.6), Color.green.opacity(0.7)),               // September
+            (Color.blue.opacity(0.7), Color.cyan.opacity(0.7)),                // October
+            (Color.brown.opacity(0.6), Color.red.opacity(0.6)),                // November
+            (Color.purple.opacity(0.6), Color.pink.opacity(0.6))               // December
         ]
         return colors[month - 1]
     }
@@ -502,7 +502,7 @@ struct MonthCard: View {
             // Card background with gradient
             event.gradient
                 .cornerRadius(16)
-                .shadow(radius: 4)
+                .shadow(color: Color.black.opacity(0.2), radius: 3, x: 0, y: 2)
             
             VStack(alignment: .leading, spacing: 8) {
                 // Month name
@@ -510,6 +510,7 @@ struct MonthCard: View {
                     Text(event.monthName)
                         .font(.system(size: 26, weight: .bold))
                         .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                     
                     Spacer()
                     
@@ -517,6 +518,7 @@ struct MonthCard: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.white)
                             .font(.title2)
+                            .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                     }
                 }
                 .padding(.bottom, 5)
@@ -527,28 +529,34 @@ struct MonthCard: View {
                         Text(event.title)
                             .font(.headline)
                             .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                         
                         HStack {
                             Image(systemName: "mappin.circle.fill")
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                             Text(event.location)
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                         }
                         
                         HStack {
                             Image(systemName: "calendar")
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                             Text("Day \(event.day)")
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                         }
                     }
                 } else {
                     // If no event, show "Add event" prompt
                     Text("Tap to add event")
                         .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                 }
             }
             .padding()
