@@ -1,28 +1,66 @@
 import SwiftUI
 import CoreBluetooth
 
+// Basic Device struct for compatibility with earlier versions of the code
+struct Device: Identifiable {
+    var id: String
+    var name: String
+}
+
 struct DevicesListView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject private var deviceStore = DeviceStore.shared
+    var devices: [Device]? = nil // Optional parameter for compatibility
     
     var body: some View {
         List {
-            Section(header: Text("Nearby Devices")) {
-                if deviceStore.getDevicesSortedBySignalStrength().isEmpty {
-                    HStack {
-                        Spacer()
-                        Text("No devices found")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                } else {
-                    ForEach(deviceStore.getDevicesSortedBySignalStrength(), id: \.identifier) { deviceInfo in
-                        DeviceRowInfo(deviceInfo: deviceInfo)
-                            .onTapGesture {
-                                if let device = bluetoothManager.nearbyDevices.first(where: { $0.identifier.uuidString == deviceInfo.identifier }) {
-                                    bluetoothManager.connectToDevice(device)
-                                }
+            // If devices array is provided (for compatibility), show those
+            if let deviceArray = devices, !deviceArray.isEmpty {
+                Section(header: Text("Available Devices")) {
+                    ForEach(deviceArray) { device in
+                        HStack {
+                            Image(systemName: "wifi")
+                                .resizable()
+                                .frame(width: 30, height: 25)
+                                .foregroundColor(.blue)
+                            
+                            VStack(alignment: .leading) {
+                                Text(device.name)
+                                    .font(.headline)
+                                Text("ID: \(device.id)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
                             }
+                            
+                            Spacer()
+                            
+                            Button("Connect") {
+                                print("Connecting to \(device.name)")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+            } else {
+                // Otherwise, use BluetoothManager's devices
+                Section(header: Text("Nearby Devices")) {
+                    if deviceStore.getDevicesSortedBySignalStrength().isEmpty {
+                        HStack {
+                            Spacer()
+                            Text("No devices found")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    } else {
+                        ForEach(deviceStore.getDevicesSortedBySignalStrength(), id: \.identifier) { deviceInfo in
+                            DeviceRowInfo(deviceInfo: deviceInfo)
+                                .onTapGesture {
+                                    if let device = bluetoothManager.nearbyDevices.first(where: { $0.identifier.uuidString == deviceInfo.identifier }) {
+                                        bluetoothManager.connectToDevice(device)
+                                    }
+                                }
+                        }
                     }
                 }
             }
@@ -161,5 +199,5 @@ struct DeviceRowInfo: View {
 }
 
 #Preview {
-    DevicesListView(bluetoothManager: BluetoothManager())
+    DevicesListView(bluetoothManager: BluetoothManager(), devices: [])
 }

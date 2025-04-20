@@ -61,7 +61,7 @@ class BluetoothManager: NSObject, ObservableObject {
     override init() {
         super.init()
         
-        print("Starting BluetoothManager initialization")
+        print("Starting BluetoothManager initialization with service: \(serviceUUID.uuidString)")
         
         // Force-set Bluetooth permission descriptions to ensure they're available
         let permissions = [
