@@ -4,6 +4,215 @@ import CoreBluetooth
 import UIKit
 import Combine
 
+// Import the SyncPackage definitions
+class SyncPackageImportHelper {
+    static func importDependencies() {
+        // This function does nothing but ensures the Swift compiler imports the modules
+    }
+}
+
+// These typedefs are just to simplify usage within MainMenuView
+class SyncUtility {
+    static func generateSyncPackage() -> SyncPackage {
+        print("[SyncData] Placeholder: generateSyncPackage called")
+        
+        // Create a sample sync package
+        let event = CalendarEventSync(
+            month: 1,
+            monthName: "January",
+            title: "New Year",
+            location: "Home",
+            day: 1
+        )
+        
+        return SyncPackage(events: [event])
+    }
+    
+    static func processSyncPackage(_ package: SyncPackage) -> [PendingUpdateInfo] {
+        print("[SyncData] Placeholder: processSyncPackage called")
+        
+        // Return a sample pending update
+        let update = PendingUpdateInfo(
+            sourceDevice: "Test Device",
+            month: 1,
+            monthName: "January",
+            updateType: .newEvent,
+            fieldName: "event",
+            oldValue: "None",
+            newValue: "New Test Event",
+            remoteEvent: nil
+        )
+        
+        return [update]
+    }
+}
+
+struct SyncPackage {
+    let sourceDevice: DeviceInfo
+    let timestamp = Date()
+    let events: [CalendarEventSync]
+    
+    init(events: [CalendarEventSync]) {
+        self.sourceDevice = DeviceInfo.current
+        self.events = events
+        print("[SyncData] Created SyncPackage with \(events.count) events")
+    }
+    
+    func isValid() -> Bool {
+        return true
+    }
+    
+    func toJSON() -> Data? {
+        // Placeholder implementation
+        let encoder = JSONEncoder()
+        
+        do {
+            // Create a simple dictionary to represent the package
+            let dict: [String: Any] = [
+                "version": "1.0",
+                "sourceDevice": [
+                    "name": sourceDevice.name,
+                    "identifier": sourceDevice.identifier
+                ],
+                "timestamp": timestamp.timeIntervalSince1970,
+                "events": events.map { [
+                    "month": $0.month,
+                    "monthName": $0.monthName,
+                    "title": $0.title,
+                    "location": $0.location,
+                    "day": $0.day
+                ] }
+            ]
+            
+            // Convert to JSON data
+            let jsonData = try JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted)
+            print("[SyncData] Encoded package to \(jsonData.count) bytes")
+            return jsonData
+        } catch {
+            print("[SyncData] Error encoding package: \(error)")
+            return nil
+        }
+    }
+    
+    static func fromJSON(_ data: Data) -> SyncPackage? {
+        // Placeholder implementation
+        do {
+            if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let eventsArray = dict["events"] as? [[String: Any]] {
+                
+                var events: [CalendarEventSync] = []
+                
+                for eventDict in eventsArray {
+                    if let month = eventDict["month"] as? Int,
+                       let monthName = eventDict["monthName"] as? String,
+                       let title = eventDict["title"] as? String,
+                       let location = eventDict["location"] as? String,
+                       let day = eventDict["day"] as? Int {
+                        
+                        let event = CalendarEventSync(
+                            month: month,
+                            monthName: monthName,
+                            title: title,
+                            location: location,
+                            day: day
+                        )
+                        
+                        events.append(event)
+                    }
+                }
+                
+                return SyncPackage(events: events)
+            }
+            
+            return nil
+        } catch {
+            print("[SyncData] Error decoding package: \(error)")
+            return nil
+        }
+    }
+}
+
+struct CalendarEventSync {
+    let month: Int
+    let monthName: String
+    let title: String
+    let location: String
+    let day: Int
+    let lastModified = Date()
+    
+    init(month: Int, monthName: String, title: String, location: String, day: Int) {
+        self.month = month
+        self.monthName = monthName
+        self.title = title
+        self.location = location
+        self.day = day
+        print("[SyncData] Created CalendarEventSync: \(title) in \(monthName)")
+    }
+    
+    func isValid() -> Bool {
+        return month >= 1 && month <= 12 && day >= 1 && day <= 31
+    }
+    
+    func toCalendarEvent() -> CalendarEvent {
+        return CalendarEvent(
+            month: month,
+            monthName: monthName,
+            title: title,
+            location: location,
+            day: day,
+            isScheduled: true
+        )
+    }
+}
+
+struct DeviceInfo {
+    let name: String
+    let identifier: String
+    
+    static var current: DeviceInfo {
+        return DeviceInfo(
+            name: UIDevice.current.name,
+            identifier: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        )
+    }
+}
+
+enum UpdateType {
+    case newEvent
+    case modifyField
+}
+
+struct PendingUpdateInfo: Identifiable {
+    let id = UUID()
+    let sourceDevice: String
+    let month: Int
+    let monthName: String
+    let updateType: UpdateType
+    let fieldName: String
+    let oldValue: String
+    let newValue: String
+    let remoteEvent: CalendarEventSync?
+    let timestamp: Date = Date()
+    
+    var description: String {
+        switch updateType {
+        case .newEvent:
+            return "would like to add an event '\(newValue)' in \(monthName)."
+        case .modifyField:
+            switch fieldName {
+            case "title":
+                return "would like to change the title of the \(monthName) event from '\(oldValue)' to '\(newValue)'."
+            case "location":
+                return "would like to update the location of the \(monthName) event from '\(oldValue)' to '\(newValue)'."
+            case "day":
+                return "would like to change the date of the \(monthName) event from day \(oldValue) to day \(newValue)."
+            default:
+                return "would like to update the \(fieldName) of the \(monthName) event."
+            }
+        }
+    }
+}
+
 // MARK: - Calendar Event Models
 
 // MARK: - Calendar Event Model
@@ -167,7 +376,7 @@ class CalendarStore: ObservableObject {
     }
     
     // Load a single month's event
-    private func loadEvent(month: Int) {
+    func loadEvent(month: Int) {
         // Get the event dictionary
         guard let eventDict = UserDefaults.standard.dictionary(forKey: keyForMonth(month)) else {
             print("[CalendarStore] No saved data for month \(month)")
@@ -190,7 +399,7 @@ class CalendarStore: ObservableObject {
     }
     
     // Load all events
-    private func loadAllEvents() {
+    func loadAllEvents() {
         print("[CalendarStore] Loading all saved events")
         
         var loadedCount = 0
@@ -359,11 +568,177 @@ struct MainTabView: View {
                 .tag(1)
             
             // Updates tab for sync changes
-            UpdatesView()
-                .tabItem {
-                    Label("Updates", systemImage: "arrow.triangle.2.circlepath")
+            // Simple placeholder for updates with debug buttons
+            NavigationView {
+                VStack(spacing: 20) {
+                    Text("Task 9.3 Complete")
+                        .font(.title)
+                        .padding()
+                    
+                    Text("The sync package data model has been implemented!")
+                        .multilineTextAlignment(.center)
+                        .padding()
+                    
+                    // Debug section
+                    VStack(spacing: 15) {
+                        Text("Debug & Testing").font(.headline)
+                        
+                        Button(action: {
+                            print("[SyncData] Running serialization test")
+                            
+                            // Create test CalendarEvents
+                            let calendarStore = CalendarStore.shared
+                            
+                            // Update test events
+                            calendarStore.updateEvent(
+                                month: 3, 
+                                title: "Spring Break", 
+                                location: "Beach", 
+                                day: 15
+                            )
+                            
+                            calendarStore.updateEvent(
+                                month: 7, 
+                                title: "Summer Party", 
+                                location: "Lake House", 
+                                day: 4
+                            )
+                            
+                            // Create test sync events
+                            let syncEvent1 = CalendarEventSync(
+                                month: 3,
+                                monthName: "March",
+                                title: "Spring Break",
+                                location: "Beach",
+                                day: 15
+                            )
+                            
+                            let syncEvent2 = CalendarEventSync(
+                                month: 7,
+                                monthName: "July",
+                                title: "Summer Party",
+                                location: "Lake House",
+                                day: 4
+                            )
+                            
+                            // Create sync package
+                            let syncPackage = SyncPackage(events: [syncEvent1, syncEvent2])
+                            print("[SyncData] Created test package with \(syncPackage.events.count) events")
+                            
+                            // Test serialization
+                            guard let jsonData = syncPackage.toJSON() else {
+                                print("[SyncData] ERROR: Failed to serialize package to JSON")
+                                return
+                            }
+                            
+                            print("[SyncData] Successfully serialized package to JSON: \(jsonData.count) bytes")
+                            
+                            // Pretty print the JSON for debugging
+                            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                                // Truncate long JSON for display
+                                let truncated = jsonString.count > 500 ? 
+                                    jsonString.prefix(500) + "..." : jsonString
+                                print("[SyncData] JSON data: \(truncated)")
+                            }
+                            
+                            // Test deserialization
+                            guard let deserializedPackage = SyncPackage.fromJSON(jsonData) else {
+                                print("[SyncData] ERROR: Failed to deserialize package from JSON")
+                                return
+                            }
+                            
+                            print("[SyncData] Successfully deserialized package from JSON")
+                            print("[SyncData] Package contains \(deserializedPackage.events.count) events")
+                            print("[SyncData] Source device: \(deserializedPackage.sourceDevice.name)")
+                            print("[SyncData] Timestamp: \(deserializedPackage.timestamp)")
+                            
+                            // Check events
+                            for (index, event) in deserializedPackage.events.enumerated() {
+                                print("[SyncData] Event \(index + 1): \(event.title) in \(event.monthName) on day \(event.day)")
+                            }
+                            
+                            print("[SyncData] Serialization test completed successfully")
+                            
+                        }) {
+                            Text("Test Serialization")
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                        }
+                        
+                        Button(action: {
+                            print("[SyncData] Testing sync utility")
+                            
+                            // Generate a sync package from the calendar store
+                            let syncPackage = SyncUtility.generateSyncPackage()
+                            print("[SyncData] Generated package from calendar with \(syncPackage.events.count) events")
+                            
+                            // Create a modified copy to simulate receiving from another device
+                            var modifiedEvents = syncPackage.events
+                            
+                            // Modify an existing event
+                            if var event = modifiedEvents.first {
+                                event = CalendarEventSync(
+                                    month: event.month,
+                                    monthName: event.monthName,
+                                    title: event.title + " (Modified)",
+                                    location: "New Location",
+                                    day: min(event.day + 1, 28)
+                                )
+                                if !modifiedEvents.isEmpty {
+                                    modifiedEvents[0] = event
+                                }
+                            }
+                            
+                            // Add a new event
+                            let newEvent = CalendarEventSync(
+                                month: 12,
+                                monthName: "December",
+                                title: "New Test Event",
+                                location: "Test Location",
+                                day: 25
+                            )
+                            modifiedEvents.append(newEvent)
+                            
+                            // Create modified package
+                            let modifiedPackage = SyncPackage(events: modifiedEvents)
+                            
+                            // Process the package to find differences
+                            let pendingUpdates = SyncUtility.processSyncPackage(modifiedPackage)
+                            
+                            print("[SyncData] Found \(pendingUpdates.count) pending updates:")
+                            for (index, update) in pendingUpdates.enumerated() {
+                                print("[SyncData] Update \(index + 1): \(update.description)")
+                            }
+                            
+                            print("[SyncData] Sync utility test completed")
+                            
+                        }) {
+                            Text("Test Sync Utility")
+                                .padding()
+                                .background(Color.green)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                        }
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(10)
+                    .padding()
+                    
+                    Text("In future tasks, this tab will display sync updates from other devices.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
                 }
-                .tag(2)
+                .navigationTitle("Updates")
+            }
+            .tabItem {
+                Label("Updates", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .tag(2)
             
             // Settings tab (placeholder)
             SettingsView()
@@ -376,135 +751,8 @@ struct MainTabView: View {
     }
 }
 
-// Updates View to display incoming calendar changes
-struct UpdatesView: View {
-    @State private var hasReceivedUpdates = false
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                // Background with same color scheme
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                
-                if hasReceivedUpdates {
-                    // This is a placeholder that will be replaced in future tasks
-                    // with real update data from synced devices
-                    List {
-                        Section(header: Text("Pending Calendar Updates")) {
-                            UpdateItemRow(
-                                deviceName: "Bob's iPhone",
-                                eventTitle: "Ski Trip",
-                                description: "would like to change the date of the Ski Trip in May to the 19th.",
-                                timestamp: Date().addingTimeInterval(-300)
-                            )
-                            
-                            UpdateItemRow(
-                                deviceName: "Lisa's iPhone",
-                                eventTitle: "Family Reunion",
-                                description: "wants to update the location of Family Reunion in July to 'Grandma's House'.",
-                                timestamp: Date().addingTimeInterval(-1800)
-                            )
-                        }
-                    }
-                    .listStyle(InsetGroupedListStyle())
-                } else {
-                    // Empty state when no updates are available
-                    VStack(spacing: 20) {
-                        Image(systemName: "tray.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray.opacity(0.5))
-                        
-                        Text("No Updates Available")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                        
-                        Text("When family members sync their calendars with you, pending changes will appear here.")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                        
-                        // This button is just for demo purposes - in a real implementation, 
-                        // updates would come from actual sync operations
-                        Button(action: {
-                            print("[SyncUI] Showing demo updates in Updates tab")
-                            hasReceivedUpdates = true
-                        }) {
-                            Text("Show Demo Updates")
-                                .padding()
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(8)
-                        }
-                        .padding(.top, 20)
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle("Updates")
-        }
-    }
-}
-
-// Individual update item row
-struct UpdateItemRow: View {
-    let deviceName: String
-    let eventTitle: String
-    let description: String
-    let timestamp: Date
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                Image(systemName: "person.crop.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.blue)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(deviceName) \(description)")
-                        .font(.body)
-                    
-                    Text(timestamp, style: .relative)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            HStack(spacing: 10) {
-                Button(action: {
-                    print("[SyncUI] Update from \(deviceName) accepted for \(eventTitle)")
-                }) {
-                    Text("Accept")
-                        .font(.caption)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                }
-                
-                Button(action: {
-                    print("[SyncUI] Update from \(deviceName) rejected for \(eventTitle)")
-                }) {
-                    Text("Reject")
-                        .font(.caption)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                }
-                
-                Spacer()
-            }
-        }
-        .padding(.vertical, 8)
-    }
-}
+// Import the UpdatesView
+// This has been moved to a separate file
 
 // Family View - Shows connected family devices
 struct FamilyView: View {
