@@ -24,7 +24,7 @@ struct SyncPackage: Codable {
     /// Initialize a new sync package
     /// - Parameter events: Calendar events to include in this package
     init(events: [CalendarEventSync], signature: String? = nil) {
-        print("[SyncData] Creating new sync package with \(events.count) events")
+        print("[SyncData] Creating sync package, version: \(syncVersion), events count: \(events.count)")
         
         self.sourceDevice = DeviceInfo.current
         self.timestamp = Date()
@@ -37,7 +37,7 @@ struct SyncPackage: Codable {
     /// Validate this sync package
     /// - Returns: Whether this package passes basic validation
     func isValid() -> Bool {
-        print("[SyncData] Validating sync package from \(sourceDevice.name)")
+        print("[SyncData] Validating sync package: source=\(sourceDevice.name), events=\(events.count)")
         
         // Ensure we have a valid timestamp (not in the future)
         guard timestamp <= Date() else {
@@ -61,7 +61,7 @@ struct SyncPackage: Codable {
             }
         }
         
-        print("[SyncData] Package validation passed")
+        print("[SyncData] Validating sync package: isValid=true")
         return true
     }
     
@@ -73,7 +73,16 @@ struct SyncPackage: Codable {
         
         do {
             let jsonData = try encoder.encode(self)
-            print("[SyncData] Successfully encoded sync package to JSON (\(jsonData.count) bytes)")
+            print("[SyncData] Serializing sync package to JSON, byte size: \(jsonData.count)")
+            
+            // For debugging: Print a readable version of the JSON
+            if let jsonObj = try? JSONSerialization.jsonObject(with: jsonData),
+               let prettyData = try? JSONSerialization.data(withJSONObject: jsonObj, options: .prettyPrinted),
+               let prettyString = String(data: prettyData, encoding: .utf8) {
+                let truncated = prettyString.count > 500 ? String(prettyString.prefix(500)) + "..." : prettyString
+                print("[SyncData] JSON content: \(truncated)")
+            }
+            
             return jsonData
         } catch {
             print("[SyncData] Error encoding sync package to JSON: \(error.localizedDescription)")
@@ -90,8 +99,16 @@ struct SyncPackage: Codable {
         
         do {
             let package = try decoder.decode(SyncPackage.self, from: data)
+            print("[SyncData] Deserializing JSON to sync package, version: \(package.syncVersion)")
             print("[SyncData] Successfully decoded sync package from JSON (\(data.count) bytes)")
             print("[SyncData] Package from \(package.sourceDevice.name) with \(package.events.count) events")
+            
+            // Validate the package
+            if !package.isValid() {
+                print("[SyncData] Deserialized package failed validation")
+                return nil
+            }
+            
             return package
         } catch {
             print("[SyncData] Error decoding sync package from JSON: \(error.localizedDescription)")
@@ -415,7 +432,7 @@ class SyncUtility {
 }
 
 /// Enum for update types
-enum UpdateType {
+enum UpdateType: Codable {
     case newEvent
     case modifyField
 }

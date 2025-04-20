@@ -57,17 +57,26 @@ struct UpdatesView: View {
                         }
                         .padding(.top, 20)
                         
-                        // Test button for running SyncPackage tests
-                        Button(action: {
-                            print("[SyncData] Running SyncPackage tests")
-                            SyncPackageTests.runTests()
-                        }) {
-                            Text("Run Sync Tests")
+                        // Test buttons for SyncPackage
+                        NavigationLink(destination: SyncPackageTester()) {
+                            Text("Open Sync Tester")
                                 .padding()
                                 .background(Color.green.opacity(0.1))
                                 .cornerRadius(8)
                         }
                         .padding(.top, 10)
+                        
+                        Button(action: {
+                            print("[SyncData] Running SyncPackage tests")
+                            let results = SyncPackageTests.runTests()
+                            print(results)
+                        }) {
+                            Text("Run Sync Tests (Console)")
+                                .padding()
+                                .background(Color.purple.opacity(0.1))
+                                .cornerRadius(8)
+                        }
+                        .padding(.top, 5)
                     }
                     .padding()
                 }

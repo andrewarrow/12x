@@ -7,6 +7,9 @@ Implement basic Bluetooth data transfer mechanism:
 5. Add progress tracking for both sending and receiving operations
 6. Implement proper error handling for transfer failures
 7. Add detailed logging with "[BTTransfer]" prefix for all Bluetooth transfer operations
+8. Add a temporary debug UI with two buttons:
+   - "Send Test Data": Sends a small predefined JSON string
+   - "Transfer Status": Shows current transfer stats
 
 Debug Logging Requirements:
 - Log transfer initialization: "[BTTransfer] Starting transfer to device {name}, data size: {bytes}"
@@ -20,7 +23,7 @@ Debug Logging Requirements:
 Testing Instructions (Two Phones):
 1. Build and run the app on both phones
 2. Connect both phones through the Family tab (ensure status shows "connected")
-3. Add a temporary debug UI with two buttons:
+3. Use the temporary debug UI with two buttons:
    - "Send Test Data": Sends a small predefined JSON string
    - "Transfer Status": Shows current transfer stats
 4. On Phone A, tap "Send Test Data" to initiate a test transfer to Phone B
