@@ -19,10 +19,12 @@ class BluetoothManager: NSObject, ObservableObject {
     private let serviceUUID = CBUUID(string: "4514d666-d6c9-49cb-bc31-dc6dfa28bd58")
     private let messageCharacteristicUUID = CBUUID(string: "462d10ad-e297-4620-a3af-d964f92fd1a5")
     private let responseCharacteristicUUID = CBUUID(string: "f3c6df3c-334a-4274-a4e9-2c9b1e9decb0")
+    private let syncDataCharacteristicUUID = CBUUID(string: "97d52a22-9292-48c6-a89f-8a71d89c5e9b")
     
     // Keep track of characteristics
     private var messageCharacteristic: CBMutableCharacteristic?
     private var responseCharacteristic: CBMutableCharacteristic?
+    private var syncDataCharacteristic: CBMutableCharacteristic?
     
     // Track characteristics discovered for peripherals
     private var discoveredCharacteristics: [UUID: [CBUUID: CBCharacteristic]] = [:]
@@ -308,12 +310,20 @@ class BluetoothManager: NSObject, ObservableObject {
             permissions: [.writeable]
         )
         
+        let syncDataChar = CBMutableCharacteristic(
+            type: syncDataCharacteristicUUID,
+            properties: [.write, .writeWithoutResponse, .notify, .read],
+            value: nil,
+            permissions: [.writeable, .readable]
+        )
+        
         // Add characteristics to the service
-        service.characteristics = [messageChar, responseChar]
+        service.characteristics = [messageChar, responseChar, syncDataChar]
         
         // Store references to characteristics
         self.messageCharacteristic = messageChar
         self.responseCharacteristic = responseChar
+        self.syncDataCharacteristic = syncDataChar
         
         // Add the service to the peripheral manager
         peripheralManager.add(service)
@@ -509,7 +519,7 @@ extension BluetoothManager: CBPeripheralDelegate {
             if service.uuid == serviceUUID {
                 print("Discovered our service, looking for message characteristics")
                 peripheral.discoverCharacteristics(
-                    [messageCharacteristicUUID, responseCharacteristicUUID],
+                    [messageCharacteristicUUID, responseCharacteristicUUID, syncDataCharacteristicUUID],
                     for: service
                 )
             }
@@ -535,9 +545,17 @@ extension BluetoothManager: CBPeripheralDelegate {
             discoveredChars[characteristic.uuid] = characteristic
             
             // Subscribe to notifications
-            if characteristic.uuid == responseCharacteristicUUID {
+            if characteristic.uuid == responseCharacteristicUUID || 
+               characteristic.uuid == syncDataCharacteristicUUID {
                 peripheral.setNotifyValue(true, for: characteristic)
             }
+            
+            // Post notification about discovered characteristic
+            NotificationCenter.default.post(
+                name: NSNotification.Name("BluetoothCharacteristicDiscovered"),
+                object: self,
+                userInfo: ["characteristic": characteristic, "peripheral": peripheral]
+            )
         }
         
         self.discoveredCharacteristics[peripheral.identifier] = discoveredChars
@@ -568,6 +586,13 @@ extension BluetoothManager: CBPeripheralDelegate {
            characteristic.uuid == responseCharacteristicUUID {
             _ = handleReceivedMessage(data, from: peripheral)
         }
+        
+        // Post notification about characteristic value update
+        NotificationCenter.default.post(
+            name: NSNotification.Name("BluetoothCharacteristicValueUpdated"),
+            object: self,
+            userInfo: ["characteristic": characteristic, "peripheral": peripheral]
+        )
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
@@ -664,6 +689,29 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                 } else {
                     peripheral.respond(to: request, withResult: .unlikelyError)
                 }
+            } else if request.characteristic.uuid == syncDataCharacteristicUUID {
+                // This is a sync data transfer - just accept it and post a notification
+                print("[BTTransfer] Received write to sync data characteristic")
+                
+                // Create a dummy CBCharacteristic to use in the notification
+                let dummyChar = CBMutableCharacteristic(
+                    type: syncDataCharacteristicUUID,
+                    properties: [.write, .notify],
+                    value: data,
+                    permissions: [.writeable]
+                )
+                
+                // Post notification about the write
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("BluetoothCharacteristicValueUpdated"),
+                    object: self,
+                    userInfo: [
+                        "characteristic": dummyChar,
+                        "peripheral": request.central
+                    ]
+                )
+                
+                peripheral.respond(to: request, withResult: .success)
             } else {
                 // Unknown characteristic
                 peripheral.respond(to: request, withResult: .requestNotSupported)

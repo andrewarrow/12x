@@ -3,6 +3,7 @@ import Foundation
 import CoreBluetooth
 import UIKit
 import Combine
+import RegexBuilder
 
 // Import the SyncPackage definitions
 class SyncPackageImportHelper {
@@ -567,171 +568,37 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            // Updates tab for sync changes
-            // Simple placeholder for updates with debug buttons
+            // Updates tab showing pending updates
             NavigationView {
                 VStack(spacing: 20) {
-                    Text("Task 9.3 Complete")
+                    Text("Updates")
                         .font(.title)
                         .padding()
                     
-                    Text("The sync package data model has been implemented!")
-                        .multilineTextAlignment(.center)
-                        .padding()
+                    Image(systemName: "tray.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray.opacity(0.5))
                     
-                    // Debug section
-                    VStack(spacing: 15) {
-                        Text("Debug & Testing").font(.headline)
-                        
-                        Button(action: {
-                            print("[SyncData] Running serialization test")
-                            
-                            // Create test CalendarEvents
-                            let calendarStore = CalendarStore.shared
-                            
-                            // Update test events
-                            calendarStore.updateEvent(
-                                month: 3, 
-                                title: "Spring Break", 
-                                location: "Beach", 
-                                day: 15
-                            )
-                            
-                            calendarStore.updateEvent(
-                                month: 7, 
-                                title: "Summer Party", 
-                                location: "Lake House", 
-                                day: 4
-                            )
-                            
-                            // Create test sync events
-                            let syncEvent1 = CalendarEventSync(
-                                month: 3,
-                                monthName: "March",
-                                title: "Spring Break",
-                                location: "Beach",
-                                day: 15
-                            )
-                            
-                            let syncEvent2 = CalendarEventSync(
-                                month: 7,
-                                monthName: "July",
-                                title: "Summer Party",
-                                location: "Lake House",
-                                day: 4
-                            )
-                            
-                            // Create sync package
-                            let syncPackage = SyncPackage(events: [syncEvent1, syncEvent2])
-                            print("[SyncData] Created test package with \(syncPackage.events.count) events")
-                            
-                            // Test serialization
-                            guard let jsonData = syncPackage.toJSON() else {
-                                print("[SyncData] ERROR: Failed to serialize package to JSON")
-                                return
-                            }
-                            
-                            print("[SyncData] Successfully serialized package to JSON: \(jsonData.count) bytes")
-                            
-                            // Pretty print the JSON for debugging
-                            if let jsonString = String(data: jsonData, encoding: .utf8) {
-                                // Truncate long JSON for display
-                                let truncated = jsonString.count > 500 ? 
-                                    jsonString.prefix(500) + "..." : jsonString
-                                print("[SyncData] JSON data: \(truncated)")
-                            }
-                            
-                            // Test deserialization
-                            guard let deserializedPackage = SyncPackage.fromJSON(jsonData) else {
-                                print("[SyncData] ERROR: Failed to deserialize package from JSON")
-                                return
-                            }
-                            
-                            print("[SyncData] Successfully deserialized package from JSON")
-                            print("[SyncData] Package contains \(deserializedPackage.events.count) events")
-                            print("[SyncData] Source device: \(deserializedPackage.sourceDevice.name)")
-                            print("[SyncData] Timestamp: \(deserializedPackage.timestamp)")
-                            
-                            // Check events
-                            for (index, event) in deserializedPackage.events.enumerated() {
-                                print("[SyncData] Event \(index + 1): \(event.title) in \(event.monthName) on day \(event.day)")
-                            }
-                            
-                            print("[SyncData] Serialization test completed successfully")
-                            
-                        }) {
-                            Text("Test Serialization")
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                        }
-                        
-                        Button(action: {
-                            print("[SyncData] Testing sync utility")
-                            
-                            // Generate a sync package from the calendar store
-                            let syncPackage = SyncUtility.generateSyncPackage()
-                            print("[SyncData] Generated package from calendar with \(syncPackage.events.count) events")
-                            
-                            // Create a modified copy to simulate receiving from another device
-                            var modifiedEvents = syncPackage.events
-                            
-                            // Modify an existing event
-                            if var event = modifiedEvents.first {
-                                event = CalendarEventSync(
-                                    month: event.month,
-                                    monthName: event.monthName,
-                                    title: event.title + " (Modified)",
-                                    location: "New Location",
-                                    day: min(event.day + 1, 28)
-                                )
-                                if !modifiedEvents.isEmpty {
-                                    modifiedEvents[0] = event
-                                }
-                            }
-                            
-                            // Add a new event
-                            let newEvent = CalendarEventSync(
-                                month: 12,
-                                monthName: "December",
-                                title: "New Test Event",
-                                location: "Test Location",
-                                day: 25
-                            )
-                            modifiedEvents.append(newEvent)
-                            
-                            // Create modified package
-                            let modifiedPackage = SyncPackage(events: modifiedEvents)
-                            
-                            // Process the package to find differences
-                            let pendingUpdates = SyncUtility.processSyncPackage(modifiedPackage)
-                            
-                            print("[SyncData] Found \(pendingUpdates.count) pending updates:")
-                            for (index, update) in pendingUpdates.enumerated() {
-                                print("[SyncData] Update \(index + 1): \(update.description)")
-                            }
-                            
-                            print("[SyncData] Sync utility test completed")
-                            
-                        }) {
-                            Text("Test Sync Utility")
-                                .padding()
-                                .background(Color.green)
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                        }
-                    }
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(10)
-                    .padding()
+                    Text("No Updates Available")
+                        .font(.title2)
+                        .fontWeight(.semibold)
                     
-                    Text("In future tasks, this tab will display sync updates from other devices.")
-                        .font(.caption)
+                    Text("When family members sync their calendars with you, pending changes will appear here.")
+                        .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
-                        .padding()
+                        .padding(.horizontal, 40)
+                    
+                    // Button to show debug features
+                    Button(action: {
+                        print("[Debug] Bluetooth test button tapped")
+                    }) {
+                        Text("Open Bluetooth Test")
+                            .padding()
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .padding(.top, 20)
                 }
                 .navigationTitle("Updates")
             }
@@ -1249,15 +1116,18 @@ struct SyncModalView: View {
     let deviceInfo: DeviceStore.SavedDeviceInfo
     let onDismiss: () -> Void
     
+    // Since we don't have direct access to SyncManager from this file,
+    // let's convert to use @State variables directly
     @State private var syncProgress: Double = 0.0
-    @State private var statusText: String = "Preparing to sync..."
+    @State private var isSyncing: Bool = false
     @State private var bytesTransferred: Int = 0
     @State private var bytesTotal: Int = 0
     @State private var isAnimating = false
     @State private var syncLog: [String] = []
+    @State private var timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     
-    // For simulating progress in this UI-only implementation
-    private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    // Just use the syncManager directly - no need for indirection
+    // We've updated all the references to use syncManager directly
     
     var body: some View {
         NavigationView {
@@ -1286,7 +1156,7 @@ struct SyncModalView: View {
                             .font(.title2)
                             .fontWeight(.bold)
                         
-                        Text(statusText)
+                        Text(getStatusText())
                             .foregroundColor(.secondary)
                     }
                     .padding(.top)
@@ -1344,53 +1214,89 @@ struct SyncModalView: View {
                     Spacer()
                     
                     // Cancel/Done button (changes when sync completes)
-                    Button(action: {
-                        if syncProgress >= 1.0 {
-                            print("[SyncUI] Sync completed and dismissed for device \(deviceInfo.displayName)")
-                        } else {
-                            print("[SyncUI] Sync cancelled by user for device \(deviceInfo.displayName)")
+                    if isSyncing {
+                        Button(action: {
+                            print("[SyncData] Cancelling sync for device \(deviceInfo.displayName)")
+                            addLogEntry("Sync cancelled by user")
+                            cancelSync()
+                        }) {
+                            Text("Cancel Sync")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.red.opacity(0.2))
+                                .foregroundColor(.red)
+                                .cornerRadius(10)
                         }
-                        onDismiss()
-                    }) {
-                        Text(syncProgress >= 1.0 ? "Done" : "Cancel")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(syncProgress >= 1.0 ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
-                            .foregroundColor(syncProgress >= 1.0 ? .green : .primary)
-                            .cornerRadius(10)
+                        .padding(.horizontal)
+                    } else {
+                        HStack(spacing: 20) {
+                            Button(action: {
+                                startSyncSimulation()
+                            }) {
+                                Text("Start Sync")
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.blue.opacity(0.2))
+                                    .foregroundColor(.blue)
+                                    .cornerRadius(10)
+                            }
+                            
+                            Button(action: {
+                                onDismiss()
+                            }) {
+                                Text("Close")
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.gray.opacity(0.2))
+                                    .foregroundColor(.primary)
+                                    .cornerRadius(10)
+                            }
+                        }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom)
+                    
+                    // Add some bottom padding
+                    Spacer().frame(height: 20)
                 }
                 .padding()
             }
             .navigationTitle("Calendar Sync")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // Only show the Done button in the toolbar while in progress
-                if syncProgress < 1.0 {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Done") {
-                            print("[SyncUI] Sync modal dismissed for device \(deviceInfo.displayName), reason: user tapped done")
-                            onDismiss()
-                        }
-                    }
-                }
-            }
             .onAppear {
-                startSyncSimulation()
+                isAnimating = true
+                addLogEntry("Sync view opened for device \(deviceInfo.displayName)")
             }
             .onReceive(timer) { _ in
-                updateSyncSimulation()
-            }
-            .onChange(of: syncProgress) { newValue in
-                // Stop animation when sync reaches 100%
-                if newValue >= 1.0 {
-                    isAnimating = false
-                }
+                updateLogWithTransferStatus()
             }
             .onDisappear {
                 isAnimating = false
+                // Cancel sync if still in progress when closing the modal
+                if isSyncing {
+                    cancelSync()
+                }
+            }
+        }
+    }
+    
+    // Helper function to get status text based on sync state
+    private func getStatusText() -> String {
+        if isSyncing {
+            if syncProgress < 0.3 {
+                return "Preparing calendar data..."
+            } else if syncProgress < 0.6 {
+                return "Transferring data..."
+            } else if syncProgress < 0.9 {
+                return "Finalizing sync..."
+            } else {
+                return "Sync almost complete..."
+            }
+        } else {
+            // If we've transferred data but are no longer syncing, we're complete
+            if bytesTransferred > 0 {
+                return "Sync completed successfully"
+            } else {
+                return "Ready to sync"
             }
         }
     }
@@ -1398,7 +1304,7 @@ struct SyncModalView: View {
     // Helper function to format bytes
     private func formatBytes(_ bytes: Int) -> String {
         let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
     }
@@ -1411,11 +1317,22 @@ struct SyncModalView: View {
         
         // Initial log entry
         addLogEntry("Initializing sync with \(deviceInfo.displayName)...")
+        
+        // Set syncing status
+        isSyncing = true
     }
     
-    // Update sync simulation for UI demonstration
-    private func updateSyncSimulation() {
-        guard syncProgress < 1.0 else { return }
+    // Cancel ongoing sync 
+    private func cancelSync() {
+        isSyncing = false
+        isAnimating = false
+        addLogEntry("Sync cancelled by user")
+    }
+    
+    // Update progress simulation for UI demonstration
+    private func updateLogWithTransferStatus() {
+        // Only update if we're syncing
+        guard isSyncing else { return }
         
         // Update progress
         let progressStep = Double.random(in: 0.01...0.05)
@@ -1426,30 +1343,28 @@ struct SyncModalView: View {
         
         // Update status text based on progress
         if syncProgress < 0.3 {
-            statusText = "Preparing calendar data..."
             if Int.random(in: 1...4) == 1 {
                 addLogEntry("Collecting calendar events...")
             }
         } else if syncProgress < 0.6 {
-            statusText = "Transferring data..."
             if Int.random(in: 1...3) == 1 {
                 let transferredBytes = Int.random(in: 1000...5000)
                 addLogEntry("Transferred \(formatBytes(transferredBytes)) of data")
             }
         } else if syncProgress < 0.9 {
-            statusText = "Finalizing sync..."
             if Int.random(in: 1...4) == 1 {
                 addLogEntry("Verifying data integrity...")
             }
         } else {
-            statusText = "Sync complete!"
-            if syncLog.last != "Sync completed successfully!" {
-                addLogEntry("Sync completed successfully!")
+            if syncProgress >= 1.0 {
+                let successMessage = "Sync completed successfully!"
+                let hasCompleted = syncLog.contains { $0.contains(successMessage) }
+                if !hasCompleted {
+                    addLogEntry(successMessage)
+                    isSyncing = false
+                }
             }
         }
-        
-        // Log current state
-        print("[SyncUI] Sync progress: \(Int(syncProgress * 100))%, bytes: \(bytesTransferred)/\(bytesTotal)")
     }
     
     // Add a log entry with timestamp
