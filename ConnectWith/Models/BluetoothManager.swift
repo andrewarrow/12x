@@ -1,6 +1,7 @@
 import Foundation
 import CoreBluetooth
 import Combine
+import UIKit
 
 // The state of the scanning process
 enum ScanningState {
@@ -309,9 +310,29 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         // Add service to peripheral manager
         peripheralManager.add(service)
         
-        // Start advertising - don't override the device name
+        // Get the device name - using better personalization
+        var deviceName = UIDevice.current.name
+        print("DEBUG: UIDevice.current.name = \(deviceName)")
+        
+        // Try to get the personalized name from UserDefaults
+        if let customName = UserDefaults.standard.string(forKey: "DeviceCustomName") {
+            deviceName = customName
+            print("DEBUG: Found custom name in UserDefaults: \(customName)")
+        } else {
+            // Use host name which often includes personalized name ("Bob's-iPhone.local" format)
+            let hostName = ProcessInfo.processInfo.hostName
+            print("DEBUG: ProcessInfo.hostName = \(hostName)")
+     
+            let cleanedName = hostName.replacingOccurrences(of: ".local", with: "")
+                                      .replacingOccurrences(of: "-", with: " ")
+            print("DEBUG: Cleaned host name = \(cleanedName)")
+            deviceName = cleanedName
+        }
+        
+        // Start advertising with the personalized device name
         peripheralManager.startAdvertising([
-            CBAdvertisementDataServiceUUIDsKey: [connectWithAppServiceUUID]
+            CBAdvertisementDataServiceUUIDsKey: [connectWithAppServiceUUID],
+            CBAdvertisementDataLocalNameKey: deviceName
         ])
     }
 }
