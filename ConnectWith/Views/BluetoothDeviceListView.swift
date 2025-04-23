@@ -142,9 +142,21 @@ struct BluetoothDeviceRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                Text(device.name)
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                HStack {
+                    Text(device.name)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    if device.isSameApp {
+                        Text("ConnectWith")
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                    }
+                }
                 
                 HStack {
                     Text("RSSI: \(device.displayRssi) dBm")
@@ -179,11 +191,16 @@ struct BluetoothDeviceRow: View {
         .padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(UIColor.secondarySystemGroupedBackground))
+                .fill(device.isSameApp ? 
+                      Color.blue.opacity(0.05) : 
+                      Color(UIColor.secondarySystemGroupedBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(colorScheme == .dark ? 0.1 : 0.2), lineWidth: 0.5)
+                .stroke(device.isSameApp ? 
+                        Color.blue.opacity(0.3) : 
+                        Color.gray.opacity(colorScheme == .dark ? 0.1 : 0.2), 
+                        lineWidth: device.isSameApp ? 1.0 : 0.5)
         )
     }
     

@@ -9,9 +9,13 @@ enum ScanningState {
     case refreshing // Special state where we're scanning but data shouldn't be displayed yet
 }
 
+// Custom UUID for app identification
+let connectWithAppServiceUUID = CBUUID(string: "6F7A99FE-2F4A-41C0-ADB0-9D8CB68BEBA0")
+
 class BluetoothManager: NSObject, ObservableObject {
     private var centralManager: CBCentralManager!
     private var peripheral: CBPeripheral?
+    private var peripheralManager: CBPeripheralManager!
     
     // Published properties that trigger UI updates
     @Published var discoveredDevices: [BluetoothDevice] = []
@@ -29,6 +33,7 @@ class BluetoothManager: NSObject, ObservableObject {
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
+        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
         // Scanning will automatically start once Bluetooth is powered on
     }
     
@@ -134,18 +139,20 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Temp holder for scan results - doesn't trigger UI updates
-    private func addDiscoveredDevice(peripheral: CBPeripheral, rssi: NSNumber) {
+    private func addDiscoveredDevice(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool) {
         let currentRssi = rssi.intValue
         
         if let index = tempDiscoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Update existing device
             tempDiscoveredDevices[index].updateRssi(currentRssi)
+            tempDiscoveredDevices[index].isSameApp = isSameApp
         } else {
             // Add new device
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
                 name: peripheral.name ?? "Unknown Device",
-                rssi: currentRssi
+                rssi: currentRssi,
+                isSameApp: isSameApp
             )
             tempDiscoveredDevices.append(newDevice)
         }
@@ -163,18 +170,20 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Standard update during normal scanning
-    private func updateDeviceList(peripheral: CBPeripheral, rssi: NSNumber) {
+    private func updateDeviceList(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool) {
         let currentRssi = rssi.intValue
         
         if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Update existing device
             discoveredDevices[index].updateRssi(currentRssi)
+            discoveredDevices[index].isSameApp = isSameApp
         } else {
             // Add new device
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
                 name: peripheral.name ?? "Unknown Device",
-                rssi: currentRssi
+                rssi: currentRssi,
+                isSameApp: isSameApp
             )
             discoveredDevices.append(newDevice)
         }
@@ -202,6 +211,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
             if discoveredDevices.isEmpty {
                 startScanning()
             }
+            // Start advertising our app's presence
+            startAdvertising()
         case .poweredOff:
             print("Bluetooth is powered off")
             error = "Bluetooth is powered off"
@@ -225,16 +236,20 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        // Check if this device is running our app by looking for our service UUID
+        let isSameApp = advertisementData[CBAdvertisementDataServiceUUIDsKey] != nil &&
+                       (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID])?.contains(connectWithAppServiceUUID) == true
+        
         // Update the appropriate list based on scanning state
         DispatchQueue.main.async {
             switch self.scanningState {
             case .refreshing:
                 // During refresh, update the temporary list
-                self.addDiscoveredDevice(peripheral: peripheral, rssi: RSSI)
+                self.addDiscoveredDevice(peripheral: peripheral, rssi: RSSI, isSameApp: isSameApp)
                 
             case .scanning:
                 // During normal scanning, update the visible list
-                self.updateDeviceList(peripheral: peripheral, rssi: RSSI)
+                self.updateDeviceList(peripheral: peripheral, rssi: RSSI, isSameApp: isSameApp)
                 
             case .notScanning:
                 // Shouldn't happen, but just in case
@@ -268,6 +283,37 @@ extension BluetoothManager: CBCentralManagerDelegate {
         connectedDevice = nil
         characteristics = []
         services = []
+    }
+}
+
+// MARK: - CBPeripheralManagerDelegate
+extension BluetoothManager: CBPeripheralManagerDelegate {
+    func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
+        switch peripheral.state {
+        case .poweredOn:
+            startAdvertising()
+        case .poweredOff:
+            print("Peripheral Bluetooth is powered off")
+        default:
+            break
+        }
+    }
+    
+    private func startAdvertising() {
+        // Create a service to advertise
+        let service = CBMutableService(type: connectWithAppServiceUUID, primary: true)
+        
+        // No need for characteristics in this simple case
+        service.characteristics = []
+        
+        // Add service to peripheral manager
+        peripheralManager.add(service)
+        
+        // Start advertising
+        peripheralManager.startAdvertising([
+            CBAdvertisementDataServiceUUIDsKey: [connectWithAppServiceUUID],
+            CBAdvertisementDataLocalNameKey: "ConnectWith"
+        ])
     }
 }
 

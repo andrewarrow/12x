@@ -15,6 +15,7 @@ struct BluetoothDevice: Identifiable {
     var lastSnapshotTime: Date = Date()
     var isConnected: Bool = false
     var lastUpdated: Date = Date()
+    var isSameApp: Bool = false
     
     // Getter for the actual current RSSI (for details screen)
     var rssi: Int { 
@@ -26,7 +27,7 @@ struct BluetoothDevice: Identifiable {
         return _displayRssi
     }
     
-    init(peripheral: CBPeripheral?, name: String, rssi: Int) {
+    init(peripheral: CBPeripheral?, name: String, rssi: Int, isSameApp: Bool = false) {
         if let peripheral = peripheral {
             self.id = peripheral.identifier
         } else {
@@ -37,6 +38,7 @@ struct BluetoothDevice: Identifiable {
         self.name = name
         self._currentRssi = rssi
         self._displayRssi = rssi
+        self.isSameApp = isSameApp
     }
     
     // Called when a new RSSI reading is received
