@@ -92,36 +92,44 @@ struct DeviceDetailView: View {
             // Progress bar and status
             if bluetoothManager.sendingCalendarData {
                 VStack(spacing: 12) {
-                    // Progress label based on current progress
-                    // Use a state variable to hold the status text to avoid flickering
+                    // Use a more stable approach to display status
                     Text(progressStatusText)
                         .font(.subheadline)
                         .foregroundColor(.primary)
-                        .animation(.none) // Disable animations for the text to prevent flickering
-                        .fixedSize(horizontal: false, vertical: true) // Ensure consistent height
-                        .frame(height: 20) // Fix the height to prevent layout shifts
+                        .animation(.none) // Disable animations for text
+                        .frame(height: 20) // Fixed height
+                        .fixedSize(horizontal: false, vertical: true) // Prevent layout shifts
+                        .id(bluetoothManager.transferState) // ID based on state ensures stable identity
                     
                     // Progress bar using the actual transfer progress
                     ProgressView(value: bluetoothManager.transferProgress)
                         .progressViewStyle(LinearProgressViewStyle())
                         .padding(.horizontal)
-                        .animation(.linear(duration: 0.3), value: bluetoothManager.transferProgress) // Smooth animation
+                        .animation(.linear(duration: 0.3), value: bluetoothManager.transferProgress)
                     
-                    // Percentage text
+                    // Percentage text - lock to state changes to reduce flickering
                     Text("\(Int(bluetoothManager.transferProgress * 100))%")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .animation(.none) // Disable animations for percentage text
+                        .animation(.none)
+                        .id("percent-\(Int(bluetoothManager.transferProgress * 100/5)*5)") // Update in 5% increments
                     
-                    HStack {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                        Text("Sending calendar data...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    // Only show spinner for active states
+                    if bluetoothManager.transferState != .complete {
+                        HStack {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                            Text("Processing...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 .padding()
+                .transaction { transaction in
+                    // Disable all animations by default
+                    transaction.animation = nil
+                }
             }
             
             Spacer()
@@ -130,24 +138,26 @@ struct DeviceDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
     
-    // Helper to determine the appropriate progress status text
+    // Get status text based on the current transfer state
     private var progressStatusText: String {
-        // Calculating once and then using the local value to avoid race conditions
-        let progress = bluetoothManager.transferProgress
-        
-        // Use broader ranges to avoid flickering between states
-        if progress < 0.15 {
+        // Use the state instead of the progress percentage
+        switch bluetoothManager.transferState {
+        case .notStarted:
+            return "Ready to send"
+        case .connecting:
             return "Connecting to device..."
-        } else if progress < 0.25 {
+        case .discoveringServices:
             return "Discovering services..."
-        } else if progress < 0.35 {
+        case .preparingData:
             return "Preparing data to send..."
-        } else if progress < 0.85 {
+        case .sending:
             return "Sending calendar data..."
-        } else if progress < 0.99 {
+        case .finalizing:
             return "Finalizing transfer..."
-        } else {
+        case .complete:
             return "Transfer complete!"
+        case .failed:
+            return "Transfer failed"
         }
     }
 }

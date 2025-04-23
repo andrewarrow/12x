@@ -31,9 +31,22 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var isConnecting = false
     @Published var error: String?
     
+    // Transfer state enum to ensure one-way transitions
+    enum TransferState: Int {
+        case notStarted = 0
+        case connecting = 1
+        case discoveringServices = 2
+        case preparingData = 3
+        case sending = 4
+        case finalizing = 5
+        case complete = 6
+        case failed = 7
+    }
+    
     // Calendar-related properties
     @Published var sendingCalendarData = false
     @Published var transferProgress: Double = 0.0 // 0.0 to 1.0
+    @Published var transferState: TransferState = .notStarted // Current state in the transfer process
     @Published var transferSuccess: Bool? = nil // nil = not completed, true = success, false = failure
     @Published var transferError: String? = nil // Error message if transfer failed
     @Published var debugMessages: [String] = []
@@ -361,6 +374,21 @@ class BluetoothManager: NSObject, ObservableObject {
         return name.contains(" ") || name.contains("'")
     }
     
+    // Helper function to update transfer state and progress atomically
+    private func updateTransferState(_ newState: TransferState, progress: Double) {
+        DispatchQueue.main.async {
+            // Only allow forward state transitions
+            if self.transferState.rawValue < newState.rawValue {
+                self.transferState = newState
+            }
+            
+            // Always update progress (with protection against going backwards)
+            if progress > self.transferProgress {
+                self.transferProgress = progress
+            }
+        }
+    }
+    
     // Send calendar data to a specific device
     func sendCalendarData(to device: BluetoothDevice) {
         addDebugMessage("Preparing to send calendar data to \(device.name)")
@@ -373,9 +401,10 @@ class BluetoothManager: NSObject, ObservableObject {
         // Create a new calendar data object with all of our entries
         let calendarData = CalendarData(senderName: deviceCustomName, entries: calendarEntries)
         
-        // Update UI to show we're sending and reset transfer state
+        // Reset transfer state completely
         DispatchQueue.main.async {
             self.transferProgress = 0.0
+            self.transferState = .notStarted
             self.transferSuccess = nil
             self.transferError = nil
             self.sendingCalendarData = true
@@ -383,10 +412,8 @@ class BluetoothManager: NSObject, ObservableObject {
         
         addDebugMessage("Connecting to \(device.name) to send calendar data...")
         
-        // Update progress to indicate we're starting the connection
-        DispatchQueue.main.async {
-            self.transferProgress = 0.1 // 10% - Starting connection
-        }
+        // Update to connecting state
+        updateTransferState(.connecting, progress: 0.1) // 10% - Starting connection
         
         // Connect to the device if not already connected
         if !device.isConnected {
@@ -394,15 +421,16 @@ class BluetoothManager: NSObject, ObservableObject {
                 if success {
                     self.addDebugMessage("Connected successfully to \(device.name)")
                     
-                    // Update progress for successful connection
-                    DispatchQueue.main.async {
-                        self.transferProgress = 0.2 // 20% - Connected, discovering services
-                    }
+                    // Update to discovering services state
+                    self.updateTransferState(.discoveringServices, progress: 0.2)
                     
                     self.discoverServices(peripheral: peripheral, calendarData: calendarData)
                 } else {
                     self.addDebugMessage("Failed to connect to \(device.name)")
+                    
+                    // Update to failed state
                     DispatchQueue.main.async {
+                        self.transferState = .failed
                         self.sendingCalendarData = false
                         self.transferSuccess = false
                         self.transferError = "Failed to connect for sending calendar data"
@@ -414,10 +442,8 @@ class BluetoothManager: NSObject, ObservableObject {
             // Already connected, proceed to discover services
             self.addDebugMessage("Already connected to \(device.name)")
             
-            // Update progress for existing connection
-            DispatchQueue.main.async {
-                self.transferProgress = 0.2 // 20% - Already connected, discovering services
-            }
+            // Update to discovering services state
+            self.updateTransferState(.discoveringServices, progress: 0.2)
             
             self.discoverServices(peripheral: peripheral, calendarData: calendarData)
         }
@@ -451,10 +477,8 @@ class BluetoothManager: NSObject, ObservableObject {
         self.pendingPeripheral = peripheral
         self.pendingCharacteristic = characteristic
         
-        // Update progress to indicate we're preparing to send chunks
-        DispatchQueue.main.async {
-            self.transferProgress = 0.3 // 30% - Preparing to send chunks
-        }
+        // Update to preparing data state
+        updateTransferState(.preparingData, progress: 0.3)
         
         // Schedule sending all chunks with INCREASED delays between them
         for chunkIndex in 0..<totalChunks {
@@ -469,14 +493,17 @@ class BluetoothManager: NSObject, ObservableObject {
                 let endIndex = min(startIndex + chunkSize, data.count)
                 let chunkData = data.subdata(in: startIndex..<endIndex)
                 
+                // If this is the first chunk, transition to sending state
+                if chunkIndex == 0 {
+                    self.updateTransferState(.sending, progress: 0.4)
+                }
+                
                 self.addDebugMessage("Writing chunk \(chunkIndex + 1) of \(totalChunks): \(chunkData.count) bytes")
                 peripheral.writeValue(chunkData, for: characteristic, type: .withResponse)
                 
                 // Update progress based on chunk index (from 40% to 80%)
                 let chunkProgress = 0.4 + (Double(chunkIndex) / Double(totalChunks) * 0.4)
-                DispatchQueue.main.async {
-                    self.transferProgress = chunkProgress
-                }
+                self.updateTransferState(.sending, progress: chunkProgress)
                 
                 // If this is the last chunk, schedule success after a LONGER delay
                 if chunkIndex == totalChunks - 1 {
@@ -485,10 +512,8 @@ class BluetoothManager: NSObject, ObservableObject {
                         guard let self = self, self.sendingCalendarData else { return }
                         self.addDebugMessage("All chunks sent, completing operation")
                         
-                        // Update progress to indicate we're finishing up
-                        DispatchQueue.main.async {
-                            self.transferProgress = 0.9 // 90% - finishing up
-                        }
+                        // Transition to finalizing state
+                        self.updateTransferState(.finalizing, progress: 0.9)
                         
                         self.finishCalendarDataSending(success: true)
                     }
@@ -601,17 +626,13 @@ class BluetoothManager: NSObject, ObservableObject {
         
         if success {
             addDebugMessage("Calendar data sent successfully!")
-            
-            // Update UI for successful transfer but don't show success message yet
-            // We'll show that only when we reach 100%
-            DispatchQueue.main.async {
-                self.transferProgress = 0.85 // 85% - almost done
-            }
+            // Progress updates will be handled by state transitions
         } else {
             addDebugMessage("Failed to send calendar data: \(errorMessage ?? "Unknown error")")
             DispatchQueue.main.async {
                 self.error = errorMessage
                 self.transferError = errorMessage
+                self.transferState = .failed
                 self.transferSuccess = false
             }
         }
@@ -631,10 +652,8 @@ class BluetoothManager: NSObject, ObservableObject {
             // Display debug message showing we're still waiting
             self.addDebugMessage("Waiting for data processing to complete before disconnecting...")
             
-            // Update progress to show we're completing the transfer
-            DispatchQueue.main.async {
-                self.transferProgress = 0.90 // 90% - finishing up
-            }
+            // We remain in finalizing state, just update progress
+            self.updateTransferState(.finalizing, progress: 0.95)
             
             // Add another delay to ensure all notifications are processed
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
@@ -646,25 +665,31 @@ class BluetoothManager: NSObject, ObservableObject {
                     self.centralManager.cancelPeripheralConnection(peripheral)
                 }
                 
-                // Reset state - set progress to 100% and show success message
+                // Only now transition to complete state
+                // State changes and UI updates happen in order with no race conditions
                 DispatchQueue.main.async {
-                    self.transferProgress = 1.0 // 100% - completed
+                    // Transition to complete state
+                    self.updateTransferState(.complete, progress: 1.0)
                     
-                    // Only now show the success message when we're at 100%
+                    // Show success message
                     if success {
                         self.transferSuccess = true
                     }
                     
-                    // Keep the progress bar visible for a moment before removing it
+                    // Keep the status visible for a moment before hiding everything
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        // Reset all UI state in one go to avoid flickering
                         self.sendingCalendarData = false
                     }
                     
                     // After 5 seconds, reset the transfer success status so it doesn't show forever
                     DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
                         guard let self = self else { return }
+                        
+                        // Reset all state in one atomic operation
                         self.transferSuccess = nil
                         self.transferError = nil
+                        self.transferState = .notStarted
                     }
                 }
             }
