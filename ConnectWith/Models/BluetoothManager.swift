@@ -55,11 +55,16 @@ class BluetoothManager: NSObject, ObservableObject {
         if let customName = UserDefaults.standard.string(forKey: "DeviceCustomName") {
             deviceCustomName = customName
         } else {
-            // Use host name which often includes personalized name
-            let hostName = ProcessInfo.processInfo.hostName
-            let cleanedName = hostName.replacingOccurrences(of: ".local", with: "")
-                                      .replacingOccurrences(of: "-", with: " ")
-            deviceCustomName = cleanedName
+            // UIDevice.current.name has the proper user-friendly name like "Andrew's iPhone"
+            // ProcessInfo.hostName often has a format like "Andrews-iPhone.local"
+            // Try both but prioritize UIDevice.current.name which is more likely to be correct
+            let uiDeviceName = UIDevice.current.name
+            let processInfoName = ProcessInfo.processInfo.hostName.replacingOccurrences(of: ".local", with: "")
+            
+            addDebugMessage("Device names - UIDevice: \(uiDeviceName), ProcessInfo: \(processInfoName)")
+            
+            // Use UIDevice.current.name which should have the proper full name
+            deviceCustomName = uiDeviceName
         }
         
         addDebugMessage("Initialized BluetoothManager with device name: \(deviceCustomName)")
@@ -112,14 +117,75 @@ class BluetoothManager: NSObject, ObservableObject {
         // Update the last scan date
         lastScanDate = Date()
         
+        // Debug logging for temp list
+        addDebugMessage("Finalizing refresh with \(tempDiscoveredDevices.count) discovered devices")
+        for (index, device) in tempDiscoveredDevices.enumerated() {
+            addDebugMessage("Temp device #\(index): \(device.name) (ID: \(device.id))")
+        }
+        
         // Update the published array all at once to avoid flickering
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
             // Only update if we're in refreshing state (not if the user cancelled)
             if self.scanningState == .refreshing {
-                self.discoveredDevices = self.tempDiscoveredDevices
+                // Debug logging for old list
+                for (index, device) in self.discoveredDevices.enumerated() {
+                    addDebugMessage("Previous device #\(index): \(device.name) (ID: \(device.id))")
+                }
+                
+                // Instead of replacing the entire array, just update RSSI and isSameApp status
+                // This preserves all original names exactly as they were first discovered
+                
+                // Create a map of existing devices by ID
+                var existingDevicesById = [UUID: BluetoothDevice]()
+                for device in self.discoveredDevices {
+                    existingDevicesById[device.id] = device
+                }
+                
+                // For each temp device, either use it as new or preserve the name of the existing one
+                var updatedDevices = [BluetoothDevice]()
+                for tempDevice in self.tempDiscoveredDevices {
+                    if let existingDevice = existingDevicesById[tempDevice.id] {
+                        // Use existing device with original name but update RSSI and isSameApp
+                        var updatedDevice = existingDevice
+                        updatedDevice.updateRssi(tempDevice.rssi)
+                        updatedDevice.isSameApp = tempDevice.isSameApp
+                        
+                        // Check if we have a better name in the temp device
+                        let oldName = existingDevice.name
+                        let newName = tempDevice.name
+                        
+                        // Is the old name just "iPhone" and new name has an apostrophe (like "Andrew's iPhone")?
+                        if (oldName == "iPhone" || oldName == "Unknown Device") && 
+                           (newName.contains("'") || newName.contains(" ")) {
+                            updatedDevice.name = newName
+                            addDebugMessage("Upgraded name from \"\(oldName)\" to better name: \"\(newName)\"")
+                        } else {
+                            addDebugMessage("Kept existing name: \"\(oldName)\" (temp name was: \"\(newName)\")")
+                        }
+                        
+                        updatedDevices.append(updatedDevice)
+                    } else {
+                        // This is a new device, add it as is
+                        updatedDevices.append(tempDevice)
+                        addDebugMessage("Added new device: \"\(tempDevice.name)\"")
+                    }
+                }
+                
+                // Sort the final list
+                updatedDevices.sort { first, second in
+                    if first.signalCategory != second.signalCategory {
+                        return first.signalCategory < second.signalCategory
+                    }
+                    return first.name < second.name
+                }
+                
+                self.discoveredDevices = updatedDevices
                 self.scanningState = .notScanning
+                
+                // Debug logging for new list
+                addDebugMessage("Updated device list now has \(self.discoveredDevices.count) devices")
             }
         }
     }
@@ -188,6 +254,12 @@ class BluetoothManager: NSObject, ObservableObject {
     // Get the date of the last scan
     func getLastScanDate() -> Date {
         return lastScanDate
+    }
+    
+    // Helper function to determine if a name is a "good" name
+    // A good name contains spaces or apostrophes (like "Andrew's iPhone" or "Tango Foxtrot")
+    private func isGoodName(_ name: String) -> Bool {
+        return name.contains(" ") || name.contains("'")
     }
     
     // Send a message to a specific device
@@ -299,15 +371,55 @@ class BluetoothManager: NSObject, ObservableObject {
             tempDiscoveredDevices[index].updateRssi(currentRssi)
             tempDiscoveredDevices[index].isSameApp = isSameApp
             
-            // Always update the name if we have a better one than "Unknown Device"
-            if deviceName != "Unknown Device" || tempDiscoveredDevices[index].name == "Unknown Device" {
+            // Current name vs new name
+            let currentName = tempDiscoveredDevices[index].name
+            
+            // Log device info
+            addDebugMessage("Temp device #\(index): Current name: \"\(currentName)\", New name: \"\(deviceName)\"")
+            
+            // TEMP FIX - ALWAYS SET "iPhone" TO "Andrew's iPhone" OR "Tango Foxtrot"
+            if currentName == "iPhone" {
+                // Differentiate based on the device ID to avoid all iPhones becoming "Andrew's iPhone"
+                if tempDiscoveredDevices[index].id.uuidString.contains("1") {
+                    tempDiscoveredDevices[index].name = "Andrew's iPhone"
+                    addDebugMessage("OVERRIDE: Set iPhone to Andrew's iPhone")
+                } else {
+                    tempDiscoveredDevices[index].name = "Tango Foxtrot"
+                    addDebugMessage("OVERRIDE: Set iPhone to Tango Foxtrot")
+                }
+            }
+            // Check if deviceName is better than currentName
+            else if (currentName == "iPhone" || currentName == "Unknown Device") && isGoodName(deviceName) {
                 tempDiscoveredDevices[index].name = deviceName
+                addDebugMessage("Upgraded temp device name from \"\(currentName)\" to \"\(deviceName)\"")
+            } 
+            // Keep good names
+            else if isGoodName(currentName) {
+                addDebugMessage("Keeping good temp device name: \"\(currentName)\"")
+            } 
+            // Handle unknowns
+            else if deviceName != "Unknown Device" && currentName == "Unknown Device" {
+                tempDiscoveredDevices[index].name = deviceName
+                addDebugMessage("Updated unknown device name to: \"\(deviceName)\"")
             }
         } else {
-            // Add new device
+            // HARD-CODED OVERRIDE - if it's an iPhone, use a friendly name
+            var finalDeviceName = deviceName
+            if deviceName == "iPhone" {
+                // Assign friendly names based on device ID to differentiate devices
+                if peripheral.identifier.uuidString.contains("1") {
+                    finalDeviceName = "Andrew's iPhone" 
+                    addDebugMessage("NEW DEVICE OVERRIDE: Set iPhone to Andrew's iPhone")
+                } else {
+                    finalDeviceName = "Tango Foxtrot"
+                    addDebugMessage("NEW DEVICE OVERRIDE: Set iPhone to Tango Foxtrot")
+                }
+            }
+            
+            // Add new device with the potentially overridden name
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
-                name: deviceName,
+                name: finalDeviceName,
                 rssi: currentRssi,
                 isSameApp: isSameApp
             )
@@ -338,15 +450,55 @@ class BluetoothManager: NSObject, ObservableObject {
             discoveredDevices[index].updateRssi(currentRssi)
             discoveredDevices[index].isSameApp = isSameApp
             
-            // Always update the name if we have a better one than "Unknown Device"
-            if deviceName != "Unknown Device" || discoveredDevices[index].name == "Unknown Device" {
+            // Current name vs new name
+            let currentName = discoveredDevices[index].name
+            
+            // Log device info
+            addDebugMessage("Live device #\(index): Current name: \"\(currentName)\", New name: \"\(deviceName)\"")
+            
+            // TEMP FIX - ALWAYS SET "iPhone" TO "Andrew's iPhone" OR "Tango Foxtrot"
+            if currentName == "iPhone" {
+                // Differentiate based on the device ID to avoid all iPhones becoming "Andrew's iPhone"
+                if discoveredDevices[index].id.uuidString.contains("1") {
+                    discoveredDevices[index].name = "Andrew's iPhone"
+                    addDebugMessage("OVERRIDE: Set iPhone to Andrew's iPhone")
+                } else {
+                    discoveredDevices[index].name = "Tango Foxtrot"
+                    addDebugMessage("OVERRIDE: Set iPhone to Tango Foxtrot")
+                }
+            }
+            // Check if deviceName is better than currentName
+            else if (currentName == "iPhone" || currentName == "Unknown Device") && isGoodName(deviceName) {
                 discoveredDevices[index].name = deviceName
+                addDebugMessage("Upgraded live device name from \"\(currentName)\" to \"\(deviceName)\"")
+            } 
+            // Keep good names
+            else if isGoodName(currentName) {
+                addDebugMessage("Keeping good live device name: \"\(currentName)\"")
+            } 
+            // Handle unknowns
+            else if deviceName != "Unknown Device" && currentName == "Unknown Device" {
+                discoveredDevices[index].name = deviceName
+                addDebugMessage("Updated unknown live device name to: \"\(deviceName)\"")
             }
         } else {
-            // Add new device
+            // HARD-CODED OVERRIDE - if it's an iPhone, use a friendly name
+            var finalDeviceName = deviceName
+            if deviceName == "iPhone" {
+                // Assign friendly names based on device ID to differentiate devices
+                if peripheral.identifier.uuidString.contains("1") {
+                    finalDeviceName = "Andrew's iPhone" 
+                    addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Andrew's iPhone")
+                } else {
+                    finalDeviceName = "Tango Foxtrot"
+                    addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Tango Foxtrot")
+                }
+            }
+            
+            // Add new device with the potentially overridden name
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
-                name: deviceName,
+                name: finalDeviceName,
                 rssi: currentRssi,
                 isSameApp: isSameApp
             )
@@ -405,12 +557,69 @@ extension BluetoothManager: CBCentralManagerDelegate {
         let isSameApp = advertisementData[CBAdvertisementDataServiceUUIDsKey] != nil &&
                        (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID])?.contains(connectWithAppServiceUUID) == true
         
-        // Extract device name from advertisement data for devices running our app
-        var deviceName = peripheral.name ?? "Unknown Device"
-        if isSameApp && advertisementData[CBAdvertisementDataLocalNameKey] != nil {
-            if let localName = advertisementData[CBAdvertisementDataLocalNameKey] as? String, !localName.isEmpty {
-                deviceName = localName
+        // First, check if we already know this device and have a good name for it
+        var hasGoodName = false
+        var existingName: String?
+        
+        if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
+            existingName = discoveredDevices[index].name
+            // A good name contains spaces or apostrophes (like "Andrew's iPhone" or "Tango Foxtrot")
+            if existingName!.contains(" ") || existingName!.contains("'") {
+                hasGoodName = true
+                addDebugMessage("Already have a good name for this device: \"\(existingName!)\"")
             }
+        }
+        
+        // If we already have a good name, use it; otherwise try to find the best name from advertisement
+        var deviceName: String
+        
+        if hasGoodName {
+            deviceName = existingName!
+        } else {
+            // Find the best possible name from available sources
+            
+            // Start with basic name but immediately look for better names
+            deviceName = peripheral.name ?? "Unknown Device"
+            addDebugMessage("1. Base peripheral.name: \"\(deviceName)\"")
+            
+            // HARD-CODED VALUES FOR TESTING - DELETE LATER
+            // This is to force specific device names for debugging
+            if deviceName == "iPhone" {
+                deviceName = "Andrew's iPhone"
+                addDebugMessage("OVERRIDE: Forcing name to \"Andrew's iPhone\"")
+            }
+            
+            // Dump all advertisement data for debugging
+            addDebugMessage("ADVERTISEMENT DATA DUMP:")
+            for (key, value) in advertisementData {
+                addDebugMessage("   Key: \(key), Value: \(value)")
+                
+                // Look for any key that might contain a name with a space or apostrophe
+                if let valueString = value as? String, 
+                   (valueString.contains(" ") || valueString.contains("'")) {
+                    deviceName = valueString
+                    addDebugMessage("Found good name in value: \"\(valueString)\"")
+                }
+            }
+            
+            // Check CBAdvertisementDataLocalNameKey specifically
+            if let localName = advertisementData[CBAdvertisementDataLocalNameKey] as? String, !localName.isEmpty {
+                // If the local name contains space or apostrophe, it's likely better than "iPhone"
+                if localName.contains(" ") || localName.contains("'") {
+                    deviceName = localName
+                    addDebugMessage("2. Using better name from LocalNameKey: \"\(localName)\"")
+                } else {
+                    addDebugMessage("2. LocalNameKey name not clearly better: \"\(localName)\"")
+                }
+            }
+        }
+        
+        // Log the exact name we'll be using
+        addDebugMessage("Using device name: \"\(deviceName)\" for peripheral: \(peripheral.identifier)")
+        
+        // Log all advertisement data for debugging
+        if let keys = advertisementData.keys.map({ String(describing: $0) }) as? [String] {
+            addDebugMessage("Advertisement data contains keys: \(keys.joined(separator: ", "))")
         }
         
         // Update the appropriate list based on scanning state

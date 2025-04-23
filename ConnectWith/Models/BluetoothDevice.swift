@@ -94,6 +94,7 @@ struct BluetoothDevice: Identifiable {
     // Get the sort key - combines category and name for very stable ordering
     var sortKey: String {
         let categoryPrefix = String(format: "%d", signalCategory)
+        // Using the full original name without any manipulation
         return "\(categoryPrefix)_\(name)_\(id.uuidString)"
     }
     
