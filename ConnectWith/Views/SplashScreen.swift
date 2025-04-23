@@ -14,7 +14,7 @@ struct SplashScreen: View {
                     .foregroundColor(.white)
                     .padding()
                 
-                Image(systemName: "wave.3.right.circle.fill")
+                Image(systemName: "antenna.radiowaves.left.and.right.circle.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 100, height: 100)

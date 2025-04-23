@@ -17,14 +17,21 @@ class BluetoothManager: NSObject, ObservableObject {
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
+        // Scanning will automatically start once Bluetooth is powered on via the delegate
     }
     
     func startScanning() {
         guard centralManager.state == .poweredOn else { return }
         
+        // Clear previous devices and start scanning
         isScanning = true
         discoveredDevices.removeAll()
         centralManager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        
+        // Automatically stop scanning after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            self?.stopScanning()
+        }
     }
     
     func stopScanning() {
@@ -53,20 +60,39 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     private func updateDeviceList(with peripheral: CBPeripheral, rssi: NSNumber) {
+        let currentRssi = rssi.intValue
+        
         if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
-            discoveredDevices[index].rssi = rssi.intValue
-            discoveredDevices[index].lastUpdated = Date()
+            // Get previous sort key before updating
+            let previousSortKey = discoveredDevices[index].sortKey
+            
+            // Update RSSI value using our time-based approach
+            discoveredDevices[index].updateRssi(currentRssi)
+            
+            // Get new sort key after updating
+            let newSortKey = discoveredDevices[index].sortKey
+            
+            // Only resort if the device's sort key changed
+            if previousSortKey != newSortKey {
+                sortDevicesStably()
+            }
         } else {
+            // New device - add it
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
                 name: peripheral.name ?? "Unknown Device",
-                rssi: rssi.intValue
+                rssi: currentRssi
             )
             discoveredDevices.append(newDevice)
+            sortDevicesStably()
         }
-        
-        // Sort devices by signal strength
-        discoveredDevices.sort { $0.rssi > $1.rssi }
+    }
+    
+    // Sort devices in a stable way that won't constantly reorder the list
+    private func sortDevicesStably() {
+        discoveredDevices.sort { first, second in
+            return first.sortKey < second.sortKey
+        }
     }
 }
 
@@ -76,7 +102,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
         switch central.state {
         case .poweredOn:
             print("Bluetooth is powered on")
-            startScanning()
+            // Initial scan when Bluetooth is ready
+            if discoveredDevices.isEmpty {
+                startScanning()
+            }
         case .poweredOff:
             print("Bluetooth is powered off")
             error = "Bluetooth is powered off"
