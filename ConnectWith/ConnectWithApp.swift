@@ -1,5 +1,4 @@
 import SwiftUI
-import UserNotifications
 
 @main
 struct ConnectWithApp: App {
@@ -7,14 +6,8 @@ struct ConnectWithApp: App {
     @StateObject private var bluetoothManager = BluetoothManager()
     
     init() {
-        // Request notification permission for chat messages
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if granted {
-                print("Notification permission granted")
-            } else if let error = error {
-                print("Notification permission error: \(error.localizedDescription)")
-            }
-        }
+        // Set up any app initialization here
+        print("App initializing with Bluetooth manager")
     }
     
     var body: some Scene {

@@ -37,6 +37,10 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var sentMessages: [ChatMessage] = []
     @Published var receivedMessages: [ChatMessage] = []
     
+    // Alert system for incoming messages
+    @Published var showMessageAlert = false
+    @Published var alertMessage: ChatMessage?
+    
     // Private properties - used internally but don't trigger UI updates
     private var tempDiscoveredDevices: [BluetoothDevice] = []
     private var lastScanDate: Date = Date()
@@ -576,8 +580,8 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                     DispatchQueue.main.async {
                         self.receivedMessages.append(incomingMessage)
                         
-                        // Show notification
-                        self.showMessageNotification(from: message.senderName, text: message.text)
+                        // Show in-app alert
+                        self.showMessageInAppAlert(message: incomingMessage)
                     }
                 } else {
                     addDebugMessage("Failed to parse received message data")
@@ -735,8 +739,8 @@ extension BluetoothManager: CBPeripheralDelegate {
                         self.discoveredDevices[index] = device
                     }
                     
-                    // Show notification
-                    self.showMessageNotification(from: message.senderName, text: message.text)
+                    // Show in-app alert
+                    self.showMessageInAppAlert(message: incomingMessage)
                 }
             } else {
                 addDebugMessage("Failed to parse received message data")
@@ -759,16 +763,13 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
     }
     
-    // Display a notification for incoming messages
-    private func showMessageNotification(from sender: String, text: String) {
-        addDebugMessage("Showing notification: Message from \(sender)")
+    // Display an in-app alert for incoming messages
+    private func showMessageInAppAlert(message: ChatMessage) {
+        addDebugMessage("Showing in-app alert: Message from \(message.senderName)")
         
-        let content = UNMutableNotificationContent()
-        content.title = "New message from \(sender)"
-        content.body = text
-        content.sound = .default
-        
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        DispatchQueue.main.async {
+            self.alertMessage = message
+            self.showMessageAlert = true
+        }
     }
 }

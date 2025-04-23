@@ -1,5 +1,112 @@
 import SwiftUI
 
+// Custom message alert view for in-app notifications
+struct MessageAlertView: View {
+    @Binding var isShowing: Bool
+    let message: ChatMessage
+    var onDismiss: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        ZStack {
+            // Semi-transparent background
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+                .onTapGesture {
+                    withAnimation {
+                        isShowing = false
+                        onDismiss()
+                    }
+                }
+            
+            // Alert content
+            VStack(spacing: 16) {
+                // Header
+                HStack {
+                    Image(systemName: "message.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.blue)
+                    
+                    Text("New Message")
+                        .font(.headline)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        withAnimation {
+                            isShowing = false
+                            onDismiss()
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                Divider()
+                
+                // Message content
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("From: \(message.senderName)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Text(message.text)
+                        .font(.body)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+                        .cornerRadius(12)
+                }
+                
+                Spacer()
+                
+                // Buttons
+                HStack {
+                    Button(action: {
+                        withAnimation {
+                            isShowing = false
+                            onDismiss()
+                        }
+                    }) {
+                        Text("Dismiss")
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.gray.opacity(0.2))
+                            .cornerRadius(8)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        withAnimation {
+                            isShowing = false
+                            onDismiss()
+                        }
+                    }) {
+                        Text("View")
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+            .padding()
+            .background(colorScheme == .dark ? Color(UIColor.systemBackground) : Color.white)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.2), radius: 16)
+            .padding(.horizontal, 40)
+            .frame(maxWidth: 400)
+            .transition(.scale(scale: 0.85).combined(with: .opacity))
+        }
+    }
+}
+
 struct BluetoothDeviceListView: View {
     @EnvironmentObject var bluetoothManager: BluetoothManager
     @State private var showingDeviceDetail = false
@@ -58,6 +165,23 @@ struct BluetoothDeviceListView: View {
                     
                     // Footer with last scan time
                     BluetoothFooter()
+                }
+                
+                // In-app Message Alert
+                if bluetoothManager.showMessageAlert, let alertMessage = bluetoothManager.alertMessage {
+                    MessageAlertView(
+                        isShowing: $bluetoothManager.showMessageAlert,
+                        message: alertMessage,
+                        onDismiss: {
+                            // Find the device that sent the message
+                            if let senderDeviceIndex = bluetoothManager.discoveredDevices.firstIndex(where: { device in
+                                device.receivedMessages.contains(where: { $0.id == alertMessage.id })
+                            }) {
+                                selectedDevice = bluetoothManager.discoveredDevices[senderDeviceIndex]
+                                showingDeviceDetail = true
+                            }
+                        }
+                    )
                 }
             }
             .navigationTitle("Bluetooth Devices")
