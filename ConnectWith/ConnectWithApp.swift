@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct ConnectWithApp: App {
+struct TwelvexApp: App {
     @State private var isShowingSplash = true
     @StateObject private var bluetoothManager = BluetoothManager()
     

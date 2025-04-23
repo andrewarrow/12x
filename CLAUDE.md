@@ -3,12 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## App Overview
-ConnectWith is an iOS application that facilitates Bluetooth connectivity between devices. The app solves the problem of seamless device pairing and communication for [specific use case - e.g., health monitoring, smart home control, data transfer]. Key features include:
-- Real-time device discovery and connection management
-- Signal strength monitoring and optimization
-- Secure data transfer between paired devices
-- User-friendly interface for managing multiple connections
-- Background connection maintenance
+12x is an iOS application that facilitates Bluetooth connectivity between devices. The app solves the problem of letting two users connect and transfer info. The first page you see is a list of nearby
+bluetooth devices with the ones that are this same app IsSameApp highlighted in blue. Those are the
+devices you can communicate with. The rest are just visible in the list but you cannot select them.
+
+The device detail page is very simple. It just has the chat feature and nothing else.
 
 ## Build and Run Commands
 - Build: `xcodebuild -project connectWith___.xcodeproj -scheme connectWith___ build`

@@ -109,8 +109,6 @@ struct MessageAlertView: View {
 
 struct BluetoothDeviceListView: View {
     @EnvironmentObject var bluetoothManager: BluetoothManager
-    @State private var showingDeviceDetail = false
-    @State private var selectedDevice: BluetoothDevice?
     
     var body: some View {
         NavigationView {
@@ -141,14 +139,32 @@ struct BluetoothDeviceListView: View {
                                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                             } else {
                                 ForEach(bluetoothManager.discoveredDevices) { device in
-                                    BluetoothDeviceRow(device: device)
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            selectedDevice = device
-                                            // Don't automatically connect to any device - just show the details
-                                            showingDeviceDetail = true
+                                    ZStack {
+                                        // Only use NavigationLink for 12x devices
+                                        if device.isSameApp {
+                                            NavigationLink(destination: 
+                                                DeviceDetailView(device: device)
+                                                    .environmentObject(bluetoothManager)
+                                            ) {
+                                                BluetoothDeviceRow(device: device)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        } else {
+                                            BluetoothDeviceRow(device: device)
+                                                .opacity(0.6)
+                                                .overlay(
+                                                    Text("Not available")
+                                                        .font(.caption)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 4)
+                                                        .background(Color.black.opacity(0.6))
+                                                        .foregroundColor(.white)
+                                                        .cornerRadius(4),
+                                                    alignment: .topTrailing
+                                                )
                                         }
-                                        .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
+                                    }
+                                    .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
                                 }
                             }
                         }
@@ -177,21 +193,14 @@ struct BluetoothDeviceListView: View {
                             if let senderDeviceIndex = bluetoothManager.discoveredDevices.firstIndex(where: { device in
                                 device.receivedMessages.contains(where: { $0.id == alertMessage.id })
                             }) {
-                                selectedDevice = bluetoothManager.discoveredDevices[senderDeviceIndex]
-                                showingDeviceDetail = true
+                                // We don't need to do anything here - user can navigate to the device if they want
                             }
                         }
                     )
                 }
             }
-            .navigationTitle("Bluetooth Devices")
+            .navigationTitle("12x")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showingDeviceDetail) {
-                if let device = selectedDevice {
-                    DeviceDetailView(device: device)
-                        .environmentObject(bluetoothManager)
-                }
-            }
         }
         .accentColor(Color.blue)
     }
@@ -266,9 +275,21 @@ struct BluetoothDeviceRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                Text(device.name)
-                    .font(.headline)
-                    .foregroundColor(device.isSameApp ? .white : .primary)
+                HStack {
+                    Text(device.name)
+                        .font(.headline)
+                        .foregroundColor(device.isSameApp ? .white : .primary)
+                    
+                    if device.isSameApp {
+                        Text("(12x)")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.3))
+                            .cornerRadius(4)
+                    }
+                }
                 
                 HStack {
                     Text("RSSI: \(device.displayRssi) dBm")
