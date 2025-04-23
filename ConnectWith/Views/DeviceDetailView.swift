@@ -5,92 +5,41 @@ struct DeviceDetailView: View {
     @EnvironmentObject var bluetoothManager: BluetoothManager
     let device: BluetoothDevice
     
-    // State variables for the currently selected month and entry
-    @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
-    @State private var entryTitle: String = ""
-    @State private var entryLocation: String = ""
-    
-    // Month names
-    let monthNames = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    ]
+    // Track sending progress
+    @State private var sendingProgress: Double = 0
     
     var body: some View {
         VStack {
-            // Month selector
-            HStack {
-                Button(action: {
-                    selectedMonth = selectedMonth > 1 ? selectedMonth - 1 : 12
-                    loadSelectedMonthData()
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
-                
-                Spacer()
-                
-                Text(monthNames[selectedMonth - 1])
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Button(action: {
-                    selectedMonth = selectedMonth < 12 ? selectedMonth + 1 : 1
-                    loadSelectedMonthData()
-                }) {
-                    Image(systemName: "chevron.right")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top)
+            Spacer()
             
-            Divider()
-                .padding(.vertical)
-            
-            // Calendar entry form
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Event Details")
+            // Information about the device
+            VStack(spacing: 15) {
+                Image(systemName: "iphone.circle")
+                    .font(.system(size: 80))
+                    .foregroundColor(.blue)
+                
+                Text("Connected to \(device.name)")
                     .font(.headline)
-                    .padding(.horizontal)
                 
-                TextField("Event Title", text: $entryTitle)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
+                Text("Signal Strength: \(device.signalStrengthDescription)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
                 
-                TextField("Location", text: $entryLocation)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                
-                Button(action: {
-                    // Save the current entry
-                    bluetoothManager.updateCalendarEntry(
-                        forMonth: selectedMonth,
-                        title: entryTitle,
-                        location: entryLocation
-                    )
-                }) {
-                    Text("Save Entry")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                .padding(.horizontal)
+                Text("Device ID: \(device.id.uuidString.prefix(8))...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .padding(.bottom)
+            .padding()
             
-            Divider()
-                .padding(.vertical)
+            Spacer()
             
             // Send data button
             Button(action: {
+                // Start progress animation
+                withAnimation(.linear(duration: 5)) {
+                    sendingProgress = 1.0
+                }
+                
                 // Send calendar data to this device
                 bluetoothManager.sendCalendarData(to: device)
             }) {
@@ -108,37 +57,36 @@ struct DeviceDetailView: View {
             .padding(.horizontal)
             .disabled(bluetoothManager.sendingCalendarData)
             
-            // Status indicator
+            // Progress bar
             if bluetoothManager.sendingCalendarData {
-                HStack {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                    Text("Sending calendar data...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                VStack(spacing: 10) {
+                    ProgressView(value: sendingProgress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .padding(.horizontal)
+                    
+                    HStack {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                        Text("Sending calendar data...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .padding()
             }
             
             Spacer()
         }
-        .navigationTitle("Calendar with \(device.name)")
+        .navigationTitle("Connect with \(device.name)")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Load data for the current month
-            loadSelectedMonthData()
-        }
-    }
-    
-    // Load entry data for the selected month
-    private func loadSelectedMonthData() {
-        if let entry = bluetoothManager.calendarEntries.first(where: { $0.month == selectedMonth }) {
-            entryTitle = entry.title
-            entryLocation = entry.location
-        } else {
-            // If no entry exists for this month, clear the fields
-            entryTitle = ""
-            entryLocation = ""
+        .onChange(of: bluetoothManager.sendingCalendarData) { isSending in
+            if isSending {
+                // Reset and animate progress when sending starts
+                sendingProgress = 0
+                withAnimation(.linear(duration: 5)) {
+                    sendingProgress = 1.0
+                }
+            }
         }
     }
 }

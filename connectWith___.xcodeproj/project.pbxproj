@@ -17,7 +17,6 @@
 		38A1B8F32AC0D99500EB14A5 /* BluetoothDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8F22AC0D99500EB14A5 /* BluetoothDevice.swift */; };
 		38A1B8F52AC0D9A000EB14A5 /* BluetoothDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8F42AC0D9A000EB14A5 /* BluetoothDeviceListView.swift */; };
 		38A1B8F72AC0D9AB00EB14A5 /* DeviceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8F62AC0D9AB00EB14A5 /* DeviceDetailView.swift */; };
-		38A1B8F92AC0D9B800EB14A5 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 38A1B8F82AC0D9B800EB14A5 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,15 +76,6 @@
 			path = ConnectWith;
 			sourceTree = "<group>";
 		};
-		38A1B8DF2AC0D82500EB14A5 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				38A1B8F02AC0D98A00EB14A5 /* BluetoothManager.swift */,
-				38A1B8F22AC0D99500EB14A5 /* BluetoothDevice.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
 		38A1B8D52AC0D7B600EB14A5 /* Preview Content */ = {
 			isa = PBXGroup;
 			children = (
@@ -104,6 +94,15 @@
 				38A1B8F62AC0D9AB00EB14A5 /* DeviceDetailView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		38A1B8DF2AC0D82500EB14A5 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				38A1B8F02AC0D98A00EB14A5 /* BluetoothManager.swift */,
+				38A1B8F22AC0D99500EB14A5 /* BluetoothDevice.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -166,7 +165,6 @@
 			files = (
 				38A1B8D72AC0D7B600EB14A5 /* Preview Assets.xcassets in Resources */,
 				38A1B8D42AC0D7B600EB14A5 /* Assets.xcassets in Resources */,
-				38A1B8FE2AC0DAE800EB14A5 /* Colors.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -323,7 +321,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ConnectWith/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = BluetoothScanner;
+				INFOPLIST_KEY_CFBundleDisplayName = 12x;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -357,7 +355,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ConnectWith/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = BluetoothScanner;
+				INFOPLIST_KEY_CFBundleDisplayName = 12x;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
