@@ -17,7 +17,7 @@ let calendarServiceUUID = CBUUID(string: "6F7A99FE-2F4A-41C0-ADB0-9D8CB68BEBA1")
 let calendarCharacteristicUUID = CBUUID(string: "6F7A99FE-2F4A-41C0-ADB0-9D8CB68BEBA2")
 
 class BluetoothManager: NSObject, ObservableObject {
-    private var centralManager: CBCentralManager!
+    var centralManager: CBCentralManager!
     private var peripheral: CBPeripheral?
     private var peripheralManager: CBPeripheralManager!
     private var calendarCharacteristic: CBMutableCharacteristic?
@@ -116,19 +116,56 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Update a calendar entry
-    func updateCalendarEntry(forMonth month: Int, title: String, location: String) {
+    func updateCalendarEntry(forMonth month: Int, title: String, location: String, day: Int = 1) {
         if let index = calendarEntries.firstIndex(where: { $0.month == month }) {
             calendarEntries[index].title = title
             calendarEntries[index].location = location
-            addDebugMessage("Updated calendar entry for month \(month)")
+            calendarEntries[index].day = day
+            addDebugMessage("Updated calendar entry for month \(month), day \(day)")
             saveCalendarEntries()
         } else {
             // If entry doesn't exist for this month, create it
-            let newEntry = CalendarEntry(title: title, location: location, month: month)
+            let newEntry = CalendarEntry(title: title, location: location, month: month, day: day)
             calendarEntries.append(newEntry)
-            addDebugMessage("Created new calendar entry for month \(month)")
+            addDebugMessage("Created new calendar entry for month \(month), day \(day)")
             saveCalendarEntries()
         }
+    }
+    
+    // Add sample calendar entries
+    func populateSampleCalendarEntries() {
+        // Clear existing entries
+        calendarEntries.removeAll()
+        
+        // Add one entry for each month with sample data
+        let events = [
+            "Team Meeting", "Project Deadline", "Conference", "Training Session",
+            "Client Presentation", "Annual Review", "Department Outing", "Budget Planning",
+            "Product Launch", "Quarterly Report", "Holiday Party", "Year End Review"
+        ]
+        
+        let locations = [
+            "Conference Room A", "Main Office", "Convention Center", "Training Center",
+            "Client HQ", "Manager's Office", "City Park", "Board Room",
+            "Exhibition Hall", "Presentation Room", "Hotel Ballroom", "Executive Suite"
+        ]
+        
+        for month in 1...12 {
+            // Use a random day between 1 and 28 (to avoid issues with February)
+            let day = Int.random(in: 1...28)
+            let entry = CalendarEntry(
+                title: events[month-1],
+                location: locations[month-1],
+                month: month,
+                day: day
+            )
+            calendarEntries.append(entry)
+            addDebugMessage("Added sample entry for month \(month), day \(day)")
+        }
+        
+        // Save the entries
+        saveCalendarEntries()
+        addDebugMessage("Sample calendar entries populated successfully")
     }
     
     // Add debug message to the log - both UI and console
@@ -379,7 +416,7 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Break down large data into smaller chunks
     private func writeSmallChunks(data: Data, characteristic: CBCharacteristic, peripheral: CBPeripheral) {
-        let chunkSize = 100  // Very small chunk size to avoid queue overflow
+        let chunkSize = 60  // Even smaller chunk size to avoid queue overflow
         let totalChunks = (data.count / chunkSize) + (data.count % chunkSize > 0 ? 1 : 0)
         
         addDebugMessage("Breaking data into \(totalChunks) smaller chunks")
@@ -389,9 +426,10 @@ class BluetoothManager: NSObject, ObservableObject {
         self.pendingPeripheral = peripheral
         self.pendingCharacteristic = characteristic
         
-        // Schedule sending all chunks with delays between them
+        // Schedule sending all chunks with INCREASED delays between them
         for chunkIndex in 0..<totalChunks {
-            let delay = 2.0 + (Double(chunkIndex) * 0.5) // 2 seconds initial delay, 0.5 second between chunks
+            // Increase initial delay to 3 seconds and chunk delay to 1 second
+            let delay = 3.0 + (Double(chunkIndex) * 1.0) // 3 seconds initial delay, 1 second between chunks
             
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self = self, self.sendingCalendarData else { return }
@@ -404,9 +442,10 @@ class BluetoothManager: NSObject, ObservableObject {
                 self.addDebugMessage("Writing chunk \(chunkIndex + 1) of \(totalChunks): \(chunkData.count) bytes")
                 peripheral.writeValue(chunkData, for: characteristic, type: .withResponse)
                 
-                // If this is the last chunk, schedule success after a delay
+                // If this is the last chunk, schedule success after a LONGER delay
                 if chunkIndex == totalChunks - 1 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                    // Increase from 3.0 to 5.0 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
                         guard let self = self, self.sendingCalendarData else { return }
                         self.addDebugMessage("All chunks sent, completing operation")
                         self.finishCalendarDataSending(success: true)
@@ -415,8 +454,9 @@ class BluetoothManager: NSObject, ObservableObject {
             }
         }
         
-        // Add a master timeout for the entire operation
-        let totalTimeout = 2.0 + (Double(totalChunks) * 0.5) + 5.0 // Base delay + all chunks + 5 second margin
+        // Add a master timeout for the entire operation with INCREASED margin
+        // Increase from 5.0 to 15.0 seconds margin
+        let totalTimeout = 3.0 + (Double(totalChunks) * 1.0) + 15.0 // Base delay + all chunks + 15 second margin
         DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout) { [weak self] in
             guard let self = self, self.sendingCalendarData else { return }
             
@@ -473,40 +513,36 @@ class BluetoothManager: NSObject, ObservableObject {
         addDebugMessage("- Timestamp: \(calendarData.timestamp)")
         addDebugMessage("- Number of entries: \(calendarData.entries.count)")
         
-        // Create a minimal version with less data
-        var minimalEntries: [CalendarEntry] = []
-        for entry in calendarData.entries {
-            // Only include non-empty entries to reduce data size
-            if !entry.title.isEmpty || !entry.location.isEmpty {
-                let trimmedTitle = entry.title.prefix(20).trimmingCharacters(in: .whitespacesAndNewlines)
-                let trimmedLocation = entry.location.prefix(20).trimmingCharacters(in: .whitespacesAndNewlines)
-                let minimalEntry = CalendarEntry(title: trimmedTitle, 
-                                              location: trimmedLocation, 
-                                              month: entry.month)
-                minimalEntries.append(minimalEntry)
-                addDebugMessage("  - Month \(entry.month): '\(trimmedTitle)' at '\(trimmedLocation)'")
-            }
-        }
+        // DRASTICALLY REDUCE data size by sending only essential information
+        // Create a single simplified dictionary instead of full JSON objects
+        let simpleData: [String: Any] = [
+            "sender": calendarData.senderName,
+            "timestamp": Int(calendarData.timestamp.timeIntervalSince1970),
+            "entryCount": calendarData.entries.count,
+            // Flatten entries into simple arrays to reduce JSON overhead
+            "months": calendarData.entries.map { $0.month },
+            "days": calendarData.entries.map { $0.day },
+            "titles": calendarData.entries.map { $0.title.prefix(15) },
+            "locations": calendarData.entries.map { $0.location.prefix(15) }
+        ]
         
-        // Create a minimal calendar data object
-        let minimalData = CalendarData(senderName: calendarData.senderName, entries: minimalEntries)
-        
-        guard let data = minimalData.toData() else {
-            addDebugMessage("Error: Failed to convert calendar data to data")
+        // Convert to JSON data with minimum overhead
+        guard let data = try? JSONSerialization.data(withJSONObject: simpleData, options: []) else {
+            addDebugMessage("Error: Failed to convert simplified calendar data to JSON")
             DispatchQueue.main.async {
                 self.sendingCalendarData = false
                 self.hasAttemptedWrite = false
-                self.error = "Failed to convert calendar data to data"
+                self.error = "Failed to convert calendar data to JSON"
             }
             return
         }
         
         // Try to print the JSON as string for debugging
         if let jsonString = String(data: data, encoding: .utf8) {
-            addDebugMessage("JSON data: \(jsonString)")
+            addDebugMessage("JSON data (simplified): \(jsonString)")
         }
         
-        addDebugMessage("Writing calendar data (\(data.count) bytes) to characteristic")
+        addDebugMessage("Writing simplified calendar data (\(data.count) bytes) to characteristic")
         
         // Use chunking approach to avoid queue overflow
         writeSmallChunks(data: data, characteristic: characteristic, peripheral: peripheral)
@@ -537,19 +573,28 @@ class BluetoothManager: NSObject, ObservableObject {
         pendingPeripheral = nil
         pendingCharacteristic = nil
         
-        // Add a delay before disconnecting to allow the data to be processed
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+        // Add a LONGER delay before disconnecting to allow the data to be processed
+        // Increase from 3.0 seconds to 8.0 seconds to ensure complete transmission
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) { [weak self] in
             guard let self = self else { return }
             
-            // Disconnect after sending
-            if let peripheral = self.peripheral, peripheral.state == .connected {
-                self.addDebugMessage("Disconnecting after calendar data operation")
-                self.centralManager.cancelPeripheralConnection(peripheral)
-            }
+            // Display debug message showing we're still waiting
+            self.addDebugMessage("Waiting for data processing to complete before disconnecting...")
             
-            // Reset state
-            DispatchQueue.main.async {
-                self.sendingCalendarData = false
+            // Add another delay to ensure all notifications are processed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                guard let self = self else { return }
+                
+                // Disconnect after sending
+                if let peripheral = self.peripheral, peripheral.state == .connected {
+                    self.addDebugMessage("Disconnecting after calendar data operation")
+                    self.centralManager.cancelPeripheralConnection(peripheral)
+                }
+                
+                // Reset state
+                DispatchQueue.main.async {
+                    self.sendingCalendarData = false
+                }
             }
         }
     }
@@ -996,29 +1041,62 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                     addDebugMessage("Accumulated JSON preview: \(jsonPreview)\(jsonString.count > previewLength ? "..." : "")")
                 }
                 
-                // Try to parse the calendar data
-                if let calendarData = CalendarData.fromData(receivedDataBuffer) {
-                    addDebugMessage("Successfully parsed complete calendar data from \(calendarData.senderName) with \(calendarData.entries.count) entries")
+                // Try to parse the simplified JSON format
+                if let jsonObject = try? JSONSerialization.jsonObject(with: receivedDataBuffer, options: []) as? [String: Any] {
+                    addDebugMessage("Successfully parsed simplified JSON data")
                     
-                    // Log each received entry for debugging
-                    for entry in calendarData.entries {
-                        addDebugMessage("  - Received Month \(entry.month): '\(entry.title)' at '\(entry.location)'")
-                    }
-                    
-                    // Clear the buffer now that we've successfully parsed the data
-                    receivedDataBuffer = Data()
-                    receivedChunkCount = 0
-                    lastChunkTimestamp = nil
-                    
-                    // Store the received calendar data
-                    DispatchQueue.main.async {
-                        self.receivedCalendarData = calendarData
+                    // Extract fields from the simplified format
+                    if let sender = jsonObject["sender"] as? String,
+                       let timestamp = jsonObject["timestamp"] as? Int,
+                       let months = jsonObject["months"] as? [Int],
+                       let days = jsonObject["days"] as? [Int],
+                       let titles = jsonObject["titles"] as? [String],
+                       let locations = jsonObject["locations"] as? [String] {
                         
-                        // Update our local calendar with the received data
-                        self.updateCalendarWithReceivedData(calendarData)
+                        // Create calendar entries from the arrays
+                        var entries: [CalendarEntry] = []
                         
-                        // Show in-app alert
-                        self.showCalendarDataInAppAlert(calendarData: calendarData)
+                        // Ensure all arrays have the same length
+                        let entryCount = min(months.count, days.count, titles.count, locations.count)
+                        
+                        for i in 0..<entryCount {
+                            let entry = CalendarEntry(
+                                title: titles[i],
+                                location: locations[i],
+                                month: months[i],
+                                day: days[i]
+                            )
+                            entries.append(entry)
+                            addDebugMessage("  - Reconstructed Month \(months[i]), Day \(days[i]): '\(titles[i])' at '\(locations[i])'")
+                        }
+                        
+                        // Create a CalendarData object
+                        let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
+                        let calendarData = CalendarData(
+                            senderName: sender,
+                            entries: entries,
+                            timestamp: date
+                        )
+                        
+                        // Clear the buffer now that we've successfully parsed the data
+                        receivedDataBuffer = Data()
+                        receivedChunkCount = 0
+                        lastChunkTimestamp = nil
+                        
+                        addDebugMessage("Successfully reconstructed calendar data with \(entries.count) entries")
+                        
+                        // Store the received calendar data
+                        DispatchQueue.main.async {
+                            self.receivedCalendarData = calendarData
+                            
+                            // Update our local calendar with the received data
+                            self.updateCalendarWithReceivedData(calendarData)
+                            
+                            // Show in-app alert
+                            self.showCalendarDataInAppAlert(calendarData: calendarData)
+                        }
+                    } else {
+                        addDebugMessage("JSON missing required fields - waiting for more chunks")
                     }
                 } else {
                     addDebugMessage("JSON not yet complete or invalid - waiting for more chunks")
@@ -1033,14 +1111,14 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     private func shouldStartNewTransmission() -> Bool {
         // Start a new transmission if:
         // 1. This is our first chunk (buffer is empty)
-        // 2. It's been more than 5 seconds since the last chunk (timeout)
+        // 2. It's been more than 15 seconds since the last chunk (INCREASED timeout from 5 to 15 seconds)
         
         if receivedDataBuffer.isEmpty {
             return true
         }
         
         if let lastTimestamp = lastChunkTimestamp, 
-           Date().timeIntervalSince(lastTimestamp) > 5.0 {
+           Date().timeIntervalSince(lastTimestamp) > 15.0 {
             // It's been too long, start fresh
             addDebugMessage("Previous transmission timed out after \(receivedChunkCount) chunks - starting fresh")
             return true

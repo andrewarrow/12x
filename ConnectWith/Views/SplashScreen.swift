@@ -38,6 +38,7 @@ struct SplashScreen: View {
                 HStack(spacing: 16) {
                     TabIconPreview(iconName: "antenna.radiowaves.left.and.right", label: "Devices", delay: 0.5)
                     TabIconPreview(iconName: "calendar", label: "Calendar", delay: 1.0)
+                    TabIconPreview(iconName: "gear", label: "Settings", delay: 1.5)
                 }
                 .padding(.top, 40)
             }

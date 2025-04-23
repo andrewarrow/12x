@@ -1,18 +1,20 @@
 import Foundation
 import CoreBluetooth
 
-// Calendar entry for each month with a title and location
+// Calendar entry for each month with a title, location, and day
 struct CalendarEntry: Identifiable, Codable {
     let id: UUID
     var title: String
     var location: String
     var month: Int // 1-12 for the months of the year
+    var day: Int // 1-31 for the day of the month
     
-    init(title: String = "", location: String = "", month: Int) {
+    init(title: String = "", location: String = "", month: Int, day: Int = 1) {
         self.id = UUID()
         self.title = title
         self.location = location
         self.month = month
+        self.day = day
     }
 }
 
@@ -23,10 +25,10 @@ struct CalendarData: Identifiable, Codable {
     let timestamp: Date
     var entries: [CalendarEntry]
     
-    init(senderName: String, entries: [CalendarEntry]) {
+    init(senderName: String, entries: [CalendarEntry], timestamp: Date = Date()) {
         self.id = UUID()
         self.senderName = senderName
-        self.timestamp = Date()
+        self.timestamp = timestamp
         self.entries = entries
     }
     
