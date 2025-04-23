@@ -1,49 +1,6 @@
 import SwiftUI
 
-@main
-struct TwelvexApp: App {
-    @State private var isShowingSplash = true
-    @StateObject private var bluetoothManager = BluetoothManager()
-    
-    init() {
-        // Set up any app initialization here
-        print("App initializing with Bluetooth manager")
-    }
-    
-    var body: some Scene {
-        WindowGroup {
-            if isShowingSplash {
-                SplashScreen(isShowingSplash: $isShowingSplash)
-            } else {
-                MainTabView()
-                    .environmentObject(bluetoothManager)
-            }
-        }
-    }
-}
-
-struct MainTabView: View {
-    @EnvironmentObject var bluetoothManager: BluetoothManager
-    
-    var body: some View {
-        TabView {
-            BluetoothDeviceListView()
-                .environmentObject(bluetoothManager)
-                .tabItem {
-                    Label("Devices", systemImage: "antenna.radiowaves.left.and.right")
-                }
-            
-            InlineCalendarView()
-                .environmentObject(bluetoothManager)
-                .tabItem {
-                    Label("Calendar", systemImage: "calendar")
-                }
-        }
-    }
-}
-
-// Inline version of CalendarView to avoid project file issues
-struct InlineCalendarView: View {
+struct CalendarView: View {
     @EnvironmentObject var bluetoothManager: BluetoothManager
     
     // State variables for the currently selected month and entry
@@ -207,4 +164,9 @@ struct CalendarEntryCard: View {
                 .fill(Color.blue.opacity(0.8))
         )
     }
+}
+
+#Preview {
+    CalendarView()
+        .environmentObject(BluetoothManager())
 }

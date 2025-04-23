@@ -33,14 +33,54 @@ struct SplashScreen: View {
                 Text("connect 12 times a year")
                     .font(.headline)
                     .foregroundColor(.white.opacity(0.9))
+                
+                // Animation to show the tabs loading
+                HStack(spacing: 16) {
+                    TabIconPreview(iconName: "antenna.radiowaves.left.and.right", label: "Devices", delay: 0.5)
+                    TabIconPreview(iconName: "calendar", label: "Calendar", delay: 1.0)
+                }
+                .padding(.top, 40)
             }
         }
         .onAppear {
-            // Auto-dismiss splash screen after 2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            // Auto-dismiss splash screen after 2.5 seconds (slightly longer to show the tab animation)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                 withAnimation {
                     isShowingSplash = false
                 }
+            }
+        }
+    }
+}
+
+// Animation for tab icons on splash screen
+struct TabIconPreview: View {
+    let iconName: String
+    let label: String
+    let delay: Double
+    
+    @State private var isVisible = false
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: iconName)
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+            
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.white)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.2))
+        )
+        .scaleEffect(isVisible ? 1.0 : 0.5)
+        .opacity(isVisible ? 1.0 : 0.0)
+        .onAppear {
+            withAnimation(Animation.spring().delay(delay)) {
+                isVisible = true
             }
         }
     }

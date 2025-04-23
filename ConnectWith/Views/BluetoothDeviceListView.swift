@@ -199,7 +199,7 @@ struct BluetoothDeviceListView: View {
                     )
                 }
             }
-            .navigationTitle("12x")
+            .navigationTitle("Nearby Devices")
             .navigationBarTitleDisplayMode(.inline)
         }
         .accentColor(Color.blue)
