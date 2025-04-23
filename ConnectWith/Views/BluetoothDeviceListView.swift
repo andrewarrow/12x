@@ -5,9 +5,6 @@ struct BluetoothDeviceListView: View {
     @State private var showingDeviceDetail = false
     @State private var selectedDevice: BluetoothDevice?
     
-    // Track refresh state completely separately from the scanning state
-    @State private var isRefreshing = false
-    
     var body: some View {
         NavigationView {
             ZStack {
@@ -26,80 +23,37 @@ struct BluetoothDeviceListView: View {
                         .fill(Color.clear)
                         .frame(height: 8)
                     
-                    // Device List
-                    ScrollView {
-                        // Pull-to-refresh implementation using built-in refreshable
-                        RefreshableScrollView(
-                            onRefresh: { done in
-                                // Signal that refresh has started
-                                isRefreshing = true
-                                
-                                // Start scanning only after the pull is released
-                                Task {
-                                    // Give UI time to update
-                                    try? await Task.sleep(nanoseconds: 100_000_000)
-                                    
-                                    // Actually perform the scan
-                                    bluetoothManager.performScan()
-                                    
-                                    // Wait for scan to complete
-                                    try? await Task.sleep(nanoseconds: 3_000_000_000)
-                                    
-                                    // Complete the refresh
-                                    isRefreshing = false
-                                    done()
+                    // Simple List with built-in refreshable that works reliably
+                    List {
+                        // Section header
+                        Section(header: Text("NEARBY DEVICES").font(.caption).foregroundColor(.secondary)) {
+                            // Empty state or device rows
+                            if bluetoothManager.discoveredDevices.isEmpty {
+                                EmptyDeviceListView()
+                                    .listRowBackground(Color.clear)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            } else {
+                                ForEach(bluetoothManager.discoveredDevices) { device in
+                                    BluetoothDeviceRow(device: device)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            selectedDevice = device
+                                            bluetoothManager.connect(to: device)
+                                            showingDeviceDetail = true
+                                        }
+                                        .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
                                 }
-                            }
-                        ) {
-                            LazyVStack(spacing: 10) {
-                                // Header for the list
-                                HStack {
-                                    Text("NEARBY DEVICES")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .fontWeight(.semibold)
-                                        .padding(.leading, 16)
-                                        .padding(.top, 20)
-                                        .padding(.bottom, 8)
-                                    
-                                    Spacer()
-                                    
-                                    // Show number of devices
-                                    if !bluetoothManager.discoveredDevices.isEmpty {
-                                        Text("\(bluetoothManager.discoveredDevices.count)")
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.accentColor)
-                                            .clipShape(Capsule())
-                                            .padding(.trailing, 16)
-                                    }
-                                }
-                                
-                                // Device list
-                                if bluetoothManager.discoveredDevices.isEmpty {
-                                    // Empty state
-                                    EmptyDeviceListView()
-                                } else {
-                                    // Device rows
-                                    ForEach(bluetoothManager.discoveredDevices) { device in
-                                        BluetoothDeviceRow(device: device)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture {
-                                                selectedDevice = device
-                                                bluetoothManager.connect(to: device)
-                                                showingDeviceDetail = true
-                                            }
-                                            .padding(.horizontal, 16)
-                                    }
-                                }
-                                
-                                // Bottom spacer
-                                Spacer(minLength: 40)
                             }
                         }
+                    }
+                    .listStyle(InsetGroupedListStyle())
+                    // Standard pull-to-refresh with an animation that works reliably
+                    .refreshable {
+                        // Clear & immediate feedback to the user
+                        print("Refreshing...")
+                        
+                        // Perform the scan (this happens AFTER the user releases)
+                        await performScan()
                     }
                     
                     // Footer with last scan time
@@ -117,122 +71,17 @@ struct BluetoothDeviceListView: View {
         }
         .accentColor(Color.blue)
     }
-}
-
-// A custom RefreshableScrollView that provides reliable iOS-like pull-to-refresh
-struct RefreshableScrollView<Content: View>: View {
-    var onRefresh: (@escaping () -> Void) -> Void
-    let content: Content
     
-    @State private var previousScrollOffset: CGFloat = 0
-    @State private var scrollOffset: CGFloat = 0
-    @State private var frozen: Bool = false
-    @State private var refreshing: Bool = false
-    
-    init(onRefresh: @escaping (@escaping () -> Void) -> Void, @ViewBuilder content: () -> Content) {
-        self.onRefresh = onRefresh
-        self.content = content()
-    }
-    
-    var body: some View {
-        VStack {
-            ScrollView {
-                ZStack(alignment: .top) {
-                    MovingView()
-                    
-                    VStack {
-                        if refreshing {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .padding(.top, 20)
-                        }
-                        
-                        content
-                            .alignmentGuide(.top) { d in
-                                // Store the current scroll position if we're refreshing
-                                if refreshing {
-                                    return -scrollOffset + d[.top]
-                                } else {
-                                    return d[.top]
-                                }
-                            }
-                    }
-                }
-                .background(FixedView())
-            }
-            .disabled(refreshing) // Disable scrolling while refreshing
-        }
-        .onPreferenceChange(RefreshableKeyTypes.PrefKey.self) { values in
-            self.refreshLogic(values: values)
-        }
-    }
-    
-    func refreshLogic(values: [RefreshableKeyTypes.PrefData]) {
-        DispatchQueue.main.async {
-            // Calculate scroll offset
-            let movingBounds = values.first(where: { $0.vType == .movingView })?.bounds ?? .zero
-            let fixedBounds = values.first(where: { $0.vType == .fixedView })?.bounds ?? .zero
-            
-            // Negative because scrollView.contentOffset.y is negative when pulled down
-            self.scrollOffset = movingBounds.minY - fixedBounds.minY
-            
-            // If we're already refreshing, don't do anything
-            if refreshing {
-                return
-            }
-            
-            // If offset crosses threshold and scrolling upwards, start refresh
-            if previousScrollOffset > 120 && scrollOffset < 80 && scrollOffset < previousScrollOffset {
-                refreshing = true
-                onRefresh {
-                    withAnimation(.linear) {
-                        self.refreshing = false
-                    }
-                }
-            }
-            
-            // Update previous offset
-            previousScrollOffset = scrollOffset
-        }
-    }
-    
-    struct MovingView: View {
-        var body: some View {
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: RefreshableKeyTypes.PrefKey.self, value: [RefreshableKeyTypes.PrefData(vType: .movingView, bounds: proxy.frame(in: .global))])
-            }
-            .frame(height: 0)
-        }
-    }
-    
-    struct FixedView: View {
-        var body: some View {
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: RefreshableKeyTypes.PrefKey.self, value: [RefreshableKeyTypes.PrefData(vType: .fixedView, bounds: proxy.frame(in: .global))])
-            }
-        }
-    }
-}
-
-// Helper types for the custom RefreshableScrollView
-enum RefreshableKeyTypes {
-    enum ViewType: Int {
-        case movingView
-        case fixedView
-    }
-    
-    struct PrefData: Equatable {
-        let vType: ViewType
-        let bounds: CGRect
-    }
-    
-    struct PrefKey: PreferenceKey {
-        static var defaultValue: [PrefData] = []
+    // Helper method to handle pull-to-refresh
+    func performScan() async {
+        // Use the special refresh method that doesn't update UI until complete
+        bluetoothManager.performRefresh()
         
-        static func reduce(value: inout [PrefData], nextValue: () -> [PrefData]) {
-            value.append(contentsOf: nextValue())
+        // Wait for scan to complete (3 seconds)
+        do {
+            try await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+        } catch {
+            print("Sleep interrupted")
         }
     }
 }
@@ -418,11 +267,8 @@ struct BluetoothFooter: View {
         formatter.timeStyle = .medium
         formatter.dateStyle = .none
         
-        if let mostRecent = bluetoothManager.discoveredDevices.max(by: { $0.lastUpdated < $1.lastUpdated }) {
-            return formatter.string(from: mostRecent.lastUpdated)
-        } else {
-            return "Unknown"
-        }
+        // Use the tracked last scan date
+        return formatter.string(from: bluetoothManager.getLastScanDate())
     }
 }
 
