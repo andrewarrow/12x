@@ -1,6 +1,37 @@
 import Foundation
 import CoreBluetooth
 
+// Chat message model for Bluetooth communication
+struct ChatMessage: Identifiable, Codable {
+    let id: UUID
+    let text: String
+    let senderName: String
+    let timestamp: Date
+    var isIncoming: Bool
+    
+    init(text: String, senderName: String, isIncoming: Bool = false) {
+        self.id = UUID()
+        self.text = text
+        self.senderName = senderName
+        self.timestamp = Date()
+        self.isIncoming = isIncoming
+    }
+    
+    // Convert to Data for Bluetooth transmission
+    func toData() -> Data? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try? encoder.encode(self)
+    }
+    
+    // Convert from Data received over Bluetooth
+    static func fromData(_ data: Data) -> ChatMessage? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(ChatMessage.self, from: data)
+    }
+}
+
 struct BluetoothDevice: Identifiable {
     let id: UUID
     let peripheral: CBPeripheral?
@@ -16,6 +47,9 @@ struct BluetoothDevice: Identifiable {
     var isConnected: Bool = false
     var lastUpdated: Date = Date()
     var isSameApp: Bool = false
+    
+    // Chat messages received from this device
+    var receivedMessages: [ChatMessage] = []
     
     // Getter for the actual current RSSI (for details screen)
     var rssi: Int { 
