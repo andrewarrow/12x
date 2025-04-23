@@ -309,10 +309,9 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         // Add service to peripheral manager
         peripheralManager.add(service)
         
-        // Start advertising
+        // Start advertising - don't override the device name
         peripheralManager.startAdvertising([
-            CBAdvertisementDataServiceUUIDsKey: [connectWithAppServiceUUID],
-            CBAdvertisementDataLocalNameKey: "ConnectWith"
+            CBAdvertisementDataServiceUUIDsKey: [connectWithAppServiceUUID]
         ])
     }
 }

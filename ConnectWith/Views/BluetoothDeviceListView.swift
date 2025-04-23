@@ -142,33 +142,21 @@ struct BluetoothDeviceRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(device.name)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    if device.isSameApp {
-                        Text("ConnectWith")
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.2))
-                            .foregroundColor(.blue)
-                            .cornerRadius(4)
-                    }
-                }
+                Text(device.name)
+                    .font(.headline)
+                    .foregroundColor(device.isSameApp ? .white : .primary)
                 
                 HStack {
                     Text("RSSI: \(device.displayRssi) dBm")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(device.isSameApp ? .white.opacity(0.9) : .secondary)
                     
                     Text("•")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(device.isSameApp ? .white.opacity(0.9) : .secondary)
                     
                     Text(device.signalStrengthDescription)
                         .font(.subheadline)
-                        .foregroundColor(signalColor(for: device.displayRssi))
+                        .foregroundColor(device.isSameApp ? .white : signalColor(for: device.displayRssi))
                         .fontWeight(.medium)
                 }
             }
@@ -178,11 +166,17 @@ struct BluetoothDeviceRow: View {
             // Signal strength indicator with better visual style
             HStack(spacing: 8) {
                 SignalStrengthIndicator(strength: signalStrength(for: device.displayRssi))
-                    .foregroundColor(signalColor(for: device.displayRssi))
+                    .foregroundColor(device.isSameApp ? .white : signalColor(for: device.displayRssi))
                 
                 if device.isConnected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(device.isSameApp ? .white : .green)
+                        .font(.system(size: 18))
+                }
+                
+                if device.isSameApp {
+                    Image(systemName: "person.wave.2.fill")
+                        .foregroundColor(.white)
                         .font(.system(size: 18))
                 }
             }
@@ -192,15 +186,15 @@ struct BluetoothDeviceRow: View {
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(device.isSameApp ? 
-                      Color.blue.opacity(0.05) : 
+                      (colorScheme == .dark ? Color.blue : Color.blue) : 
                       Color(UIColor.secondarySystemGroupedBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(device.isSameApp ? 
-                        Color.blue.opacity(0.3) : 
+                        Color.white.opacity(0.3) : 
                         Color.gray.opacity(colorScheme == .dark ? 0.1 : 0.2), 
-                        lineWidth: device.isSameApp ? 1.0 : 0.5)
+                        lineWidth: device.isSameApp ? 2.0 : 0.5)
         )
     }
     
