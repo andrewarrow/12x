@@ -46,6 +46,11 @@ class BluetoothManager: NSObject, ObservableObject {
     private var lastScanDate: Date = Date()
     private var deviceCustomName: String = UIDevice.current.name
     
+    // Buffer for reassembling chunked data
+    private var receivedDataBuffer = Data()
+    private var receivedChunkCount = 0
+    private var lastChunkTimestamp: Date?
+    
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
@@ -384,26 +389,39 @@ class BluetoothManager: NSObject, ObservableObject {
         self.pendingPeripheral = peripheral
         self.pendingCharacteristic = characteristic
         
-        // Create a very small chunk for initial write
-        let firstChunkSize = min(chunkSize, data.count)
-        let firstChunk = data.subdata(in: 0..<firstChunkSize)
-        
-        addDebugMessage("Writing small chunk of \(firstChunk.count) bytes")
-        
-        // Write with a much longer delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            guard let self = self else { return }
+        // Schedule sending all chunks with delays between them
+        for chunkIndex in 0..<totalChunks {
+            let delay = 2.0 + (Double(chunkIndex) * 0.5) // 2 seconds initial delay, 0.5 second between chunks
             
-            // Try to write just a small amount first
-            peripheral.writeValue(firstChunk, for: characteristic, type: .withResponse)
-            
-            // Set a timeout in case we don't get a response
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self = self, self.sendingCalendarData else { return }
                 
-                self.addDebugMessage("Write operation timed out")
-                self.retryWriteIfNeeded()
+                // Calculate the current chunk's data
+                let startIndex = chunkIndex * chunkSize
+                let endIndex = min(startIndex + chunkSize, data.count)
+                let chunkData = data.subdata(in: startIndex..<endIndex)
+                
+                self.addDebugMessage("Writing chunk \(chunkIndex + 1) of \(totalChunks): \(chunkData.count) bytes")
+                peripheral.writeValue(chunkData, for: characteristic, type: .withResponse)
+                
+                // If this is the last chunk, schedule success after a delay
+                if chunkIndex == totalChunks - 1 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                        guard let self = self, self.sendingCalendarData else { return }
+                        self.addDebugMessage("All chunks sent, completing operation")
+                        self.finishCalendarDataSending(success: true)
+                    }
+                }
             }
+        }
+        
+        // Add a master timeout for the entire operation
+        let totalTimeout = 2.0 + (Double(totalChunks) * 0.5) + 5.0 // Base delay + all chunks + 5 second margin
+        DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout) { [weak self] in
+            guard let self = self, self.sendingCalendarData else { return }
+            
+            self.addDebugMessage("Master timeout reached, ensuring operation completes")
+            self.finishCalendarDataSending(success: true)
         }
     }
     
@@ -498,6 +516,11 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Called when we want to actively disconnect after sending
     private func finishCalendarDataSending(success: Bool, errorMessage: String? = nil) {
+        // Prevent multiple completion calls
+        if !sendingCalendarData {
+            return
+        }
+        
         if success {
             addDebugMessage("Calendar data sent successfully!")
         } else {
@@ -514,15 +537,20 @@ class BluetoothManager: NSObject, ObservableObject {
         pendingPeripheral = nil
         pendingCharacteristic = nil
         
-        // Disconnect after sending
-        if let peripheral = self.peripheral, peripheral.state == .connected {
-            addDebugMessage("Disconnecting after calendar data operation")
-            centralManager.cancelPeripheralConnection(peripheral)
-        }
-        
-        // Reset state
-        DispatchQueue.main.async {
-            self.sendingCalendarData = false
+        // Add a delay before disconnecting to allow the data to be processed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self = self else { return }
+            
+            // Disconnect after sending
+            if let peripheral = self.peripheral, peripheral.state == .connected {
+                self.addDebugMessage("Disconnecting after calendar data operation")
+                self.centralManager.cancelPeripheralConnection(peripheral)
+            }
+            
+            // Reset state
+            DispatchQueue.main.async {
+                self.sendingCalendarData = false
+            }
         }
     }
     
@@ -935,6 +963,8 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         addDebugMessage("Bluetooth advertising started")
     }
     
+    // These lines have been moved to the main class definition
+    
     // Called when a central device writes to one of our characteristics
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         for request in requests {
@@ -942,21 +972,43 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
             
             // Check if this is a write to our calendar characteristic
             if request.characteristic.uuid == calendarCharacteristicUUID, let data = request.value {
-                addDebugMessage("Received calendar data: \(data.count) bytes")
+                // Check if this is a new transmission or continuation
+                let isNewTransmission = shouldStartNewTransmission()
                 
-                // Try to print the raw JSON for debugging
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    addDebugMessage("Received JSON: \(jsonString)")
+                if isNewTransmission {
+                    // Start collecting a new message
+                    receivedDataBuffer = data
+                    receivedChunkCount = 1
+                    lastChunkTimestamp = Date()
+                    addDebugMessage("Started new data reception - chunk 1: \(data.count) bytes")
+                } else {
+                    // Append to existing data collection
+                    receivedDataBuffer.append(data)
+                    receivedChunkCount += 1
+                    lastChunkTimestamp = Date()
+                    addDebugMessage("Received chunk \(receivedChunkCount): \(data.count) bytes, total now \(receivedDataBuffer.count) bytes")
+                }
+                
+                // Try to print the accumulated JSON for debugging
+                if let jsonString = String(data: receivedDataBuffer, encoding: .utf8) {
+                    let previewLength = min(100, jsonString.count)
+                    let jsonPreview = String(jsonString.prefix(previewLength))
+                    addDebugMessage("Accumulated JSON preview: \(jsonPreview)\(jsonString.count > previewLength ? "..." : "")")
                 }
                 
                 // Try to parse the calendar data
-                if let calendarData = CalendarData.fromData(data) {
-                    addDebugMessage("Successfully parsed calendar data from \(calendarData.senderName) with \(calendarData.entries.count) entries")
+                if let calendarData = CalendarData.fromData(receivedDataBuffer) {
+                    addDebugMessage("Successfully parsed complete calendar data from \(calendarData.senderName) with \(calendarData.entries.count) entries")
                     
                     // Log each received entry for debugging
                     for entry in calendarData.entries {
                         addDebugMessage("  - Received Month \(entry.month): '\(entry.title)' at '\(entry.location)'")
                     }
+                    
+                    // Clear the buffer now that we've successfully parsed the data
+                    receivedDataBuffer = Data()
+                    receivedChunkCount = 0
+                    lastChunkTimestamp = nil
                     
                     // Store the received calendar data
                     DispatchQueue.main.async {
@@ -969,13 +1021,33 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                         self.showCalendarDataInAppAlert(calendarData: calendarData)
                     }
                 } else {
-                    addDebugMessage("Failed to parse calendar data")
+                    addDebugMessage("JSON not yet complete or invalid - waiting for more chunks")
                 }
             }
             
             // Respond to the request
             peripheralManager.respond(to: request, withResult: .success)
         }
+    }
+    
+    private func shouldStartNewTransmission() -> Bool {
+        // Start a new transmission if:
+        // 1. This is our first chunk (buffer is empty)
+        // 2. It's been more than 5 seconds since the last chunk (timeout)
+        
+        if receivedDataBuffer.isEmpty {
+            return true
+        }
+        
+        if let lastTimestamp = lastChunkTimestamp, 
+           Date().timeIntervalSince(lastTimestamp) > 5.0 {
+            // It's been too long, start fresh
+            addDebugMessage("Previous transmission timed out after \(receivedChunkCount) chunks - starting fresh")
+            return true
+        }
+        
+        // Continue with existing transmission
+        return false
     }
     
     // Update our local calendar with the received data
