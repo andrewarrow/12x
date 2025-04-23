@@ -143,15 +143,32 @@ class BluetoothManager: NSObject, ObservableObject {
     private func addDiscoveredDevice(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool) {
         let currentRssi = rssi.intValue
         
+        // Try to extract device name from advertisement data for "blue background" devices
+        var deviceName = peripheral.name ?? "Unknown Device"
+        
+        // For devices running our app, try to get the most accurate name
+        if isSameApp {
+            // Check local name in advertisement data which should have the personalized name
+            if let advertisementData = peripheral.value(forKey: "advertisementData") as? [String: Any],
+               let localName = advertisementData["kCBAdvDataLocalName"] as? String {
+                deviceName = localName
+            }
+        }
+        
         if let index = tempDiscoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Update existing device
             tempDiscoveredDevices[index].updateRssi(currentRssi)
             tempDiscoveredDevices[index].isSameApp = isSameApp
+            
+            // Always update the name if we have a better one than "Unknown Device"
+            if deviceName != "Unknown Device" || tempDiscoveredDevices[index].name == "Unknown Device" {
+                tempDiscoveredDevices[index].name = deviceName
+            }
         } else {
             // Add new device
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
-                name: peripheral.name ?? "Unknown Device",
+                name: deviceName,
                 rssi: currentRssi,
                 isSameApp: isSameApp
             )
@@ -174,15 +191,32 @@ class BluetoothManager: NSObject, ObservableObject {
     private func updateDeviceList(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool) {
         let currentRssi = rssi.intValue
         
+        // Try to extract device name from advertisement data for "blue background" devices
+        var deviceName = peripheral.name ?? "Unknown Device"
+        
+        // For devices running our app, try to get the most accurate name
+        if isSameApp {
+            // Check local name in advertisement data which should have the personalized name
+            if let advertisementData = peripheral.value(forKey: "advertisementData") as? [String: Any],
+               let localName = advertisementData["kCBAdvDataLocalName"] as? String {
+                deviceName = localName
+            }
+        }
+        
         if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Update existing device
             discoveredDevices[index].updateRssi(currentRssi)
             discoveredDevices[index].isSameApp = isSameApp
+            
+            // Always update the name if we have a better one than "Unknown Device"
+            if deviceName != "Unknown Device" || discoveredDevices[index].name == "Unknown Device" {
+                discoveredDevices[index].name = deviceName
+            }
         } else {
             // Add new device
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
-                name: peripheral.name ?? "Unknown Device",
+                name: deviceName,
                 rssi: currentRssi,
                 isSameApp: isSameApp
             )
