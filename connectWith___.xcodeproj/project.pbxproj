@@ -13,6 +13,11 @@
 		38A1B8E12AC0D83A00EB14A5 /* SplashScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8E02AC0D83A00EB14A5 /* SplashScreen.swift */; };
 		38A1B8E32AC0D84700EB14A5 /* MainMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8E22AC0D84700EB14A5 /* MainMenuView.swift */; };
 		38A1B8E52AC0D85400EB14A5 /* MenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8E42AC0D85400EB14A5 /* MenuButton.swift */; };
+		38A1B8F12AC0D98A00EB14A5 /* BluetoothManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8F02AC0D98A00EB14A5 /* BluetoothManager.swift */; };
+		38A1B8F32AC0D99500EB14A5 /* BluetoothDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8F22AC0D99500EB14A5 /* BluetoothDevice.swift */; };
+		38A1B8F52AC0D9A000EB14A5 /* BluetoothDeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8F42AC0D9A000EB14A5 /* BluetoothDeviceListView.swift */; };
+		38A1B8F72AC0D9AB00EB14A5 /* DeviceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A1B8F62AC0D9AB00EB14A5 /* DeviceDetailView.swift */; };
+		38A1B8F92AC0D9B800EB14A5 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 38A1B8F82AC0D9B800EB14A5 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +28,11 @@
 		38A1B8E02AC0D83A00EB14A5 /* SplashScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreen.swift; sourceTree = "<group>"; };
 		38A1B8E22AC0D84700EB14A5 /* MainMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenuView.swift; sourceTree = "<group>"; };
 		38A1B8E42AC0D85400EB14A5 /* MenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuButton.swift; sourceTree = "<group>"; };
+		38A1B8F02AC0D98A00EB14A5 /* BluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothManager.swift; sourceTree = "<group>"; };
+		38A1B8F22AC0D99500EB14A5 /* BluetoothDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothDevice.swift; sourceTree = "<group>"; };
+		38A1B8F42AC0D9A000EB14A5 /* BluetoothDeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothDeviceListView.swift; sourceTree = "<group>"; };
+		38A1B8F62AC0D9AB00EB14A5 /* DeviceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDetailView.swift; sourceTree = "<group>"; };
+		38A1B8F82AC0D9B800EB14A5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,10 +67,21 @@
 			children = (
 				38A1B8CF2AC0D7B500EB14A5 /* ConnectWithApp.swift */,
 				38A1B8DE2AC0D81E00EB14A5 /* Views */,
+				38A1B8DF2AC0D82500EB14A5 /* Models */,
+				38A1B8F82AC0D9B800EB14A5 /* Info.plist */,
 				38A1B8D32AC0D7B600EB14A5 /* Assets.xcassets */,
 				38A1B8D52AC0D7B600EB14A5 /* Preview Content */,
 			);
 			path = ConnectWith;
+			sourceTree = "<group>";
+		};
+		38A1B8DF2AC0D82500EB14A5 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				38A1B8F02AC0D98A00EB14A5 /* BluetoothManager.swift */,
+				38A1B8F22AC0D99500EB14A5 /* BluetoothDevice.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		38A1B8D52AC0D7B600EB14A5 /* Preview Content */ = {
@@ -77,6 +98,8 @@
 				38A1B8E02AC0D83A00EB14A5 /* SplashScreen.swift */,
 				38A1B8E22AC0D84700EB14A5 /* MainMenuView.swift */,
 				38A1B8E42AC0D85400EB14A5 /* MenuButton.swift */,
+				38A1B8F42AC0D9A000EB14A5 /* BluetoothDeviceListView.swift */,
+				38A1B8F62AC0D9AB00EB14A5 /* DeviceDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -153,6 +176,10 @@
 			files = (
 				38A1B8E32AC0D84700EB14A5 /* MainMenuView.swift in Sources */,
 				38A1B8E52AC0D85400EB14A5 /* MenuButton.swift in Sources */,
+				38A1B8F12AC0D98A00EB14A5 /* BluetoothManager.swift in Sources */,
+				38A1B8F32AC0D99500EB14A5 /* BluetoothDevice.swift in Sources */,
+				38A1B8F52AC0D9A000EB14A5 /* BluetoothDeviceListView.swift in Sources */,
+				38A1B8F72AC0D9AB00EB14A5 /* DeviceDetailView.swift in Sources */,
 				38A1B8D02AC0D7B500EB14A5 /* ConnectWithApp.swift in Sources */,
 				38A1B8E12AC0D83A00EB14A5 /* SplashScreen.swift in Sources */,
 			);
@@ -292,7 +319,8 @@
 				DEVELOPMENT_TEAM = 755R3VBZ84;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = 12x;
+				INFOPLIST_FILE = ConnectWith/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BluetoothScanner;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -325,7 +353,8 @@
 				DEVELOPMENT_TEAM = 755R3VBZ84;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = 12x;
+				INFOPLIST_FILE = ConnectWith/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BluetoothScanner;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

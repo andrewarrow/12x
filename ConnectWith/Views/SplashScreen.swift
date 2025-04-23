@@ -9,17 +9,21 @@ struct SplashScreen: View {
                 .ignoresSafeArea()
             
             VStack {
-                Text("connectWith___")
+                Text("Bluetooth Explorer")
                     .font(.system(size: 42, weight: .bold))
                     .foregroundColor(.white)
                     .padding()
                 
-                Image(systemName: "link.circle.fill")
+                Image(systemName: "wave.3.right.circle.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 100, height: 100)
                     .foregroundColor(.white)
                     .padding()
+                
+                Text("Discover and explore Bluetooth devices")
+                    .font(.headline)
+                    .foregroundColor(.white.opacity(0.9))
             }
         }
         .onAppear {
