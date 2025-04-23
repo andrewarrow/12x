@@ -37,6 +37,22 @@ struct DeviceDetailView: View {
                         Text(device.isConnected ? "Connected" : "Disconnected")
                             .foregroundColor(device.isConnected ? .green : .secondary)
                     }
+                    
+                    if !device.isConnected {
+                        Button(action: {
+                            bluetoothManager.connect(to: device)
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Connect to Device")
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(BorderedButtonStyle())
+                        .controlSize(.large)
+                        .foregroundColor(.accentColor)
+                        .padding(.vertical, 4)
+                    }
                 }
                 
                 if bluetoothManager.isConnecting {

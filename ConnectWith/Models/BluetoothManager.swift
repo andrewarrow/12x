@@ -140,20 +140,11 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Temp holder for scan results - doesn't trigger UI updates
-    private func addDiscoveredDevice(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool) {
+    private func addDiscoveredDevice(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool, overrideName: String? = nil) {
         let currentRssi = rssi.intValue
         
-        // Try to extract device name from advertisement data for "blue background" devices
-        var deviceName = peripheral.name ?? "Unknown Device"
-        
-        // For devices running our app, try to get the most accurate name
-        if isSameApp {
-            // Check local name in advertisement data which should have the personalized name
-            if let advertisementData = peripheral.value(forKey: "advertisementData") as? [String: Any],
-               let localName = advertisementData["kCBAdvDataLocalName"] as? String {
-                deviceName = localName
-            }
-        }
+        // Use the override name if provided, otherwise fall back to peripheral.name
+        var deviceName = overrideName ?? peripheral.name ?? "Unknown Device"
         
         if let index = tempDiscoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Update existing device
@@ -188,20 +179,11 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Standard update during normal scanning
-    private func updateDeviceList(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool) {
+    private func updateDeviceList(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool, overrideName: String? = nil) {
         let currentRssi = rssi.intValue
         
-        // Try to extract device name from advertisement data for "blue background" devices
-        var deviceName = peripheral.name ?? "Unknown Device"
-        
-        // For devices running our app, try to get the most accurate name
-        if isSameApp {
-            // Check local name in advertisement data which should have the personalized name
-            if let advertisementData = peripheral.value(forKey: "advertisementData") as? [String: Any],
-               let localName = advertisementData["kCBAdvDataLocalName"] as? String {
-                deviceName = localName
-            }
-        }
+        // Use the override name if provided, otherwise fall back to peripheral.name
+        var deviceName = overrideName ?? peripheral.name ?? "Unknown Device"
         
         if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Update existing device
@@ -275,16 +257,24 @@ extension BluetoothManager: CBCentralManagerDelegate {
         let isSameApp = advertisementData[CBAdvertisementDataServiceUUIDsKey] != nil &&
                        (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID])?.contains(connectWithAppServiceUUID) == true
         
+        // Extract device name from advertisement data for devices running our app
+        var deviceName = peripheral.name ?? "Unknown Device"
+        if isSameApp && advertisementData[CBAdvertisementDataLocalNameKey] != nil {
+            if let localName = advertisementData[CBAdvertisementDataLocalNameKey] as? String, !localName.isEmpty {
+                deviceName = localName
+            }
+        }
+        
         // Update the appropriate list based on scanning state
         DispatchQueue.main.async {
             switch self.scanningState {
             case .refreshing:
                 // During refresh, update the temporary list
-                self.addDiscoveredDevice(peripheral: peripheral, rssi: RSSI, isSameApp: isSameApp)
+                self.addDiscoveredDevice(peripheral: peripheral, rssi: RSSI, isSameApp: isSameApp, overrideName: deviceName)
                 
             case .scanning:
                 // During normal scanning, update the visible list
-                self.updateDeviceList(peripheral: peripheral, rssi: RSSI, isSameApp: isSameApp)
+                self.updateDeviceList(peripheral: peripheral, rssi: RSSI, isSameApp: isSameApp, overrideName: deviceName)
                 
             case .notScanning:
                 // Shouldn't happen, but just in case
@@ -335,6 +325,12 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     }
     
     private func startAdvertising() {
+        // Only proceed if Bluetooth is powered on
+        guard peripheralManager.state == .poweredOn else {
+            print("Cannot start advertising - Bluetooth peripheral is not powered on")
+            return
+        }
+        
         // Create a service to advertise
         let service = CBMutableService(type: connectWithAppServiceUUID, primary: true)
         

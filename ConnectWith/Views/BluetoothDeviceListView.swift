@@ -38,10 +38,7 @@ struct BluetoothDeviceListView: View {
                                         .contentShape(Rectangle())
                                         .onTapGesture {
                                             selectedDevice = device
-                                            // Only actively connect if not showing a device from our app
-                                            if !device.isSameApp {
-                                                bluetoothManager.connect(to: device)
-                                            }
+                                            // Don't automatically connect to any device - just show the details
                                             showingDeviceDetail = true
                                         }
                                         .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
