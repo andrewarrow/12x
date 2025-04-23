@@ -20,11 +20,17 @@ class BluetoothManager: NSObject, ObservableObject {
         // Scanning will automatically start once Bluetooth is powered on via the delegate
     }
     
-    func startScanning() {
-        guard centralManager.state == .poweredOn else { return }
+    // Actually perform the scan and update devices
+    func performScan() {
+        guard centralManager.state == .poweredOn else {
+            isScanning = false
+            return
+        }
+        
+        // Set scanning flag
+        isScanning = true
         
         // Clear previous devices and start scanning
-        isScanning = true
         discoveredDevices.removeAll()
         centralManager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
         
@@ -104,7 +110,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
             print("Bluetooth is powered on")
             // Initial scan when Bluetooth is ready
             if discoveredDevices.isEmpty {
-                startScanning()
+                performScan()
             }
         case .poweredOff:
             print("Bluetooth is powered off")
