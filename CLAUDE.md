@@ -7,7 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 bluetooth devices with the ones that are this same app IsSameApp highlighted in blue. Those are the
 devices you can communicate with. The rest are just visible in the list but you cannot select them.
 
-The device detail page is very simple. It just has the chat feature and nothing else.
+When you select an IsSameApp device the detail page has a simple calendar with just the current 12
+months of the year and the ability to edit 1 day on each month. For that 1 day you can edit a title and a location. These are both saved to your local device (core user) and transmitted over bluetooth.
+
+When the receiving phone gets this information it replaces it's calendar data with what the
+other phone sent over.
 
 ## Build and Run Commands
 - Build: `xcodebuild -project connectWith___.xcodeproj -scheme connectWith___ build`

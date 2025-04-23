@@ -1,20 +1,33 @@
 import Foundation
 import CoreBluetooth
 
-// Chat message model for Bluetooth communication
-struct ChatMessage: Identifiable, Codable {
+// Calendar entry for each month with a title and location
+struct CalendarEntry: Identifiable, Codable {
     let id: UUID
-    let text: String
+    var title: String
+    var location: String
+    var month: Int // 1-12 for the months of the year
+    
+    init(title: String = "", location: String = "", month: Int) {
+        self.id = UUID()
+        self.title = title
+        self.location = location
+        self.month = month
+    }
+}
+
+// Calendar data model for Bluetooth transmission
+struct CalendarData: Identifiable, Codable {
+    let id: UUID
     let senderName: String
     let timestamp: Date
-    var isIncoming: Bool
+    var entries: [CalendarEntry]
     
-    init(text: String, senderName: String, isIncoming: Bool = false) {
+    init(senderName: String, entries: [CalendarEntry]) {
         self.id = UUID()
-        self.text = text
         self.senderName = senderName
         self.timestamp = Date()
-        self.isIncoming = isIncoming
+        self.entries = entries
     }
     
     // Convert to Data for Bluetooth transmission
@@ -25,10 +38,10 @@ struct ChatMessage: Identifiable, Codable {
     }
     
     // Convert from Data received over Bluetooth
-    static func fromData(_ data: Data) -> ChatMessage? {
+    static func fromData(_ data: Data) -> CalendarData? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(ChatMessage.self, from: data)
+        return try? decoder.decode(CalendarData.self, from: data)
     }
 }
 
@@ -48,8 +61,8 @@ struct BluetoothDevice: Identifiable {
     var lastUpdated: Date = Date()
     var isSameApp: Bool = false
     
-    // Chat messages received from this device
-    var receivedMessages: [ChatMessage] = []
+    // Calendar data received from this device
+    var receivedCalendarData: CalendarData?
     
     // Getter for the actual current RSSI (for details screen)
     var rssi: Int { 

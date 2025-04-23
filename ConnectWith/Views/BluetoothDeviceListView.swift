@@ -1,9 +1,9 @@
 import SwiftUI
 
-// Custom message alert view for in-app notifications
-struct MessageAlertView: View {
+// Custom calendar data alert view for in-app notifications
+struct CalendarDataAlertView: View {
     @Binding var isShowing: Bool
-    let message: ChatMessage
+    let calendarData: CalendarData
     var onDismiss: () -> Void
     @Environment(\.colorScheme) var colorScheme
     
@@ -23,11 +23,11 @@ struct MessageAlertView: View {
             VStack(spacing: 16) {
                 // Header
                 HStack {
-                    Image(systemName: "message.fill")
+                    Image(systemName: "calendar")
                         .font(.system(size: 24))
                         .foregroundColor(.blue)
                     
-                    Text("New Message")
+                    Text("Calendar Data Received")
                         .font(.headline)
                     
                     Spacer()
@@ -46,13 +46,13 @@ struct MessageAlertView: View {
                 
                 Divider()
                 
-                // Message content
+                // Calendar data content
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("From: \(message.senderName)")
+                    Text("From: \(calendarData.senderName)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
-                    Text(message.text)
+                    Text("Received calendar with \(calendarData.entries.count) entries")
                         .font(.body)
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -86,7 +86,7 @@ struct MessageAlertView: View {
                             onDismiss()
                         }
                     }) {
-                        Text("View")
+                        Text("View Calendar")
                             .fontWeight(.medium)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
@@ -183,15 +183,15 @@ struct BluetoothDeviceListView: View {
                     BluetoothFooter()
                 }
                 
-                // In-app Message Alert
-                if bluetoothManager.showMessageAlert, let alertMessage = bluetoothManager.alertMessage {
-                    MessageAlertView(
-                        isShowing: $bluetoothManager.showMessageAlert,
-                        message: alertMessage,
+                // In-app Calendar Data Alert
+                if bluetoothManager.showCalendarDataAlert, let alertCalendarData = bluetoothManager.alertCalendarData {
+                    CalendarDataAlertView(
+                        isShowing: $bluetoothManager.showCalendarDataAlert,
+                        calendarData: alertCalendarData,
                         onDismiss: {
-                            // Find the device that sent the message
+                            // Find the device that sent the calendar data
                             if let senderDeviceIndex = bluetoothManager.discoveredDevices.firstIndex(where: { device in
-                                device.receivedMessages.contains(where: { $0.id == alertMessage.id })
+                                device.receivedCalendarData?.id == alertCalendarData.id
                             }) {
                                 // We don't need to do anything here - user can navigate to the device if they want
                             }

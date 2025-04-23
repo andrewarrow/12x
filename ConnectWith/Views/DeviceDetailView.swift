@@ -4,81 +4,142 @@ import CoreBluetooth
 struct DeviceDetailView: View {
     @EnvironmentObject var bluetoothManager: BluetoothManager
     let device: BluetoothDevice
-    @State private var messageText = ""
     
-    // Send message function
-    func sendMessage() {
-        guard !messageText.isEmpty else { return }
-        
-        // Send the message
-        bluetoothManager.sendMessage(text: messageText, to: device)
-        
-        // Clear the text field
-        messageText = ""
-    }
+    // State variables for the currently selected month and entry
+    @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
+    @State private var entryTitle: String = ""
+    @State private var entryLocation: String = ""
+    
+    // Month names
+    let monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
     
     var body: some View {
         VStack {
-            // Message input at the top
+            // Month selector
             HStack {
-                TextField("Type a message...", text: $messageText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                
                 Button(action: {
-                    sendMessage()
+                    selectedMonth = selectedMonth > 1 ? selectedMonth - 1 : 12
+                    loadSelectedMonthData()
                 }) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title)
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
                         .foregroundColor(.blue)
                 }
-                .disabled(messageText.isEmpty)
-                .padding(.trailing)
+                
+                Spacer()
+                
+                Text(monthNames[selectedMonth - 1])
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                Button(action: {
+                    selectedMonth = selectedMonth < 12 ? selectedMonth + 1 : 1
+                    loadSelectedMonthData()
+                }) {
+                    Image(systemName: "chevron.right")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                }
             }
+            .padding(.horizontal)
             .padding(.top)
             
             Divider()
                 .padding(.vertical)
             
-            // Messages list
-            if device.receivedMessages.isEmpty && bluetoothManager.sentMessages.isEmpty {
-                Spacer()
-                Text("No messages yet")
-                    .foregroundColor(.secondary)
-                Spacer()
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading) {
-                        ForEach(bluetoothManager.sentMessages) { message in
-                            HStack {
-                                Spacer()
-                                Text(message.text)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(10)
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                        }
-                        
-                        ForEach(device.receivedMessages) { message in
-                            HStack {
-                                Text(message.text)
-                                    .padding()
-                                    .background(Color.gray.opacity(0.2))
-                                    .cornerRadius(10)
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                        }
-                    }
+            // Calendar entry form
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Event Details")
+                    .font(.headline)
+                    .padding(.horizontal)
+                
+                TextField("Event Title", text: $entryTitle)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+                
+                TextField("Location", text: $entryLocation)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+                
+                Button(action: {
+                    // Save the current entry
+                    bluetoothManager.updateCalendarEntry(
+                        forMonth: selectedMonth,
+                        title: entryTitle,
+                        location: entryLocation
+                    )
+                }) {
+                    Text("Save Entry")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
                 }
+                .padding(.horizontal)
             }
+            .padding(.bottom)
+            
+            Divider()
+                .padding(.vertical)
+            
+            // Send data button
+            Button(action: {
+                // Send calendar data to this device
+                bluetoothManager.sendCalendarData(to: device)
+            }) {
+                HStack {
+                    Image(systemName: "arrow.up.doc.fill")
+                    Text("Send Calendar to \(device.name)")
+                }
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.green)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding(.horizontal)
+            .disabled(bluetoothManager.sendingCalendarData)
+            
+            // Status indicator
+            if bluetoothManager.sendingCalendarData {
+                HStack {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                    Text("Sending calendar data...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+            }
+            
+            Spacer()
         }
-        .navigationTitle("Chat with \(device.name)")
+        .navigationTitle("Calendar with \(device.name)")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Load data for the current month
+            loadSelectedMonthData()
+        }
+    }
+    
+    // Load entry data for the selected month
+    private func loadSelectedMonthData() {
+        if let entry = bluetoothManager.calendarEntries.first(where: { $0.month == selectedMonth }) {
+            entryTitle = entry.title
+            entryLocation = entry.location
+        } else {
+            // If no entry exists for this month, clear the fields
+            entryTitle = ""
+            entryLocation = ""
+        }
     }
 }
 
