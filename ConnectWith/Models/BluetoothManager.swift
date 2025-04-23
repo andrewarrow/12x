@@ -379,7 +379,6 @@ extension BluetoothManager: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
-            self.error = "Error reading characteristic value: \(error.localizedDescription)"
             return
         }
         
