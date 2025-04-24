@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct MainMenuView: View {
+    @EnvironmentObject var bluetoothManager: BluetoothManager
+    
     var body: some View {
         NavigationView {
             VStack(spacing: 30) {
@@ -9,8 +11,14 @@ struct MainMenuView: View {
                     .fontWeight(.bold)
                     .padding()
                 
-                MenuButton(title: "Connect", iconName: "person.2.fill", color: .blue)
-                MenuButton(title: "Discover", iconName: "magnifyingglass", color: .green)
+                NavigationLink(destination: BluetoothDeviceListView()) {
+                    MenuButton(title: "Connect", iconName: "person.2.fill", color: .blue)
+                }
+                
+                NavigationLink(destination: CalendarView()) {
+                    MenuButton(title: "Calendar", iconName: "calendar", color: .green)
+                }
+                
                 MenuButton(title: "Settings", iconName: "gear", color: .purple)
                 
                 Spacer()
@@ -23,4 +31,5 @@ struct MainMenuView: View {
 
 #Preview {
     MainMenuView()
+        .environmentObject(BluetoothManager())
 }
