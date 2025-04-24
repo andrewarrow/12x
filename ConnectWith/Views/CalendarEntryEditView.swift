@@ -259,11 +259,7 @@ struct CalendarEntryEditView: View {
                 // Entry form
                 VStack(alignment: .leading, spacing: 20) {
                     // Day picker
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Day")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .padding(.bottom, 8)
+                    VStack(alignment: .leading, spacing: 8) {                    
                             
                         Picker("Day", selection: $selectedDay) {
                             ForEach(availableDays, id: \.self) { day in
@@ -271,16 +267,12 @@ struct CalendarEntryEditView: View {
                             }
                         }
                         .pickerStyle(WheelPickerStyle())
-                        .frame(height: 120)
+                        .frame(height: 240)
                         .padding(.bottom, 8)
                     }
                     
                     // Title field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Event Title")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .padding(.bottom, 8)
                         
                         if isEditingTitle {
                             // Use UIKit TextField for better keyboard control
@@ -305,10 +297,6 @@ struct CalendarEntryEditView: View {
                     
                     // Location field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Location")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .padding(.bottom, 8)
                         
                         if isEditingLocation {
                             // Use UIKit TextField for better keyboard control
