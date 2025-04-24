@@ -72,12 +72,43 @@ class BluetoothManager: NSObject, ObservableObject {
     
     override init() {
         super.init()
-        centralManager = CBCentralManager(delegate: self, queue: nil)
-        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        
+        print("DEBUG: Initializing main BluetoothManager")
+        
+        // CRITICAL CHANGE: We now delay Bluetooth initialization to prevent blocking the UI
+        // Initialize after a short delay to ensure UI is visible first
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.performDeferredInitialization()
+        }
+    }
+    
+    // This function is called after a delay to ensure UI is visible first
+    private func performDeferredInitialization() {
+        // Use specific options to improve startup performance and avoid delays
+        // Critical: Don't trigger a second permission prompt by setting ShowPowerAlertKey to false
+        let centralOptions: [String: Any] = [
+            CBCentralManagerOptionShowPowerAlertKey: false, // Don't show another power alert
+            CBCentralManagerOptionRestoreIdentifierKey: "com.app.12x.central" // Support background restoration
+        ]
+        
+        let peripheralOptions: [String: Any] = [
+            CBPeripheralManagerOptionShowPowerAlertKey: false, // Don't show another power alert
+            CBPeripheralManagerOptionRestoreIdentifierKey: "com.app.12x.peripheral" // Support background restoration
+        ]
+        
+        // Use a dedicated queue for Bluetooth operations to avoid blocking main thread
+        let bluetoothQueue = DispatchQueue(label: "com.app.12x.bluetoothQueue", qos: .utility)
+        
+        // Initialize with specific options
+        print("DEBUG: Creating main CBCentralManager")
+        self.centralManager = CBCentralManager(delegate: self, queue: bluetoothQueue, options: centralOptions)
+        
+        print("DEBUG: Creating main CBPeripheralManager")
+        self.peripheralManager = CBPeripheralManager(delegate: self, queue: bluetoothQueue, options: peripheralOptions)
         
         // Initialize custom device name
         if let customName = UserDefaults.standard.string(forKey: "DeviceCustomName") {
-            deviceCustomName = customName
+            self.deviceCustomName = customName
         } else {
             // UIDevice.current.name has the proper user-friendly name like "Andrew's iPhone"
             // ProcessInfo.hostName often has a format like "Andrews-iPhone.local"
@@ -85,19 +116,19 @@ class BluetoothManager: NSObject, ObservableObject {
             let uiDeviceName = UIDevice.current.name
             let processInfoName = ProcessInfo.processInfo.hostName.replacingOccurrences(of: ".local", with: "")
             
-            addDebugMessage("Device names - UIDevice: \(uiDeviceName), ProcessInfo: \(processInfoName)")
+            self.addDebugMessage("Device names - UIDevice: \(uiDeviceName), ProcessInfo: \(processInfoName)")
             
             // Use UIDevice.current.name which should have the proper full name
-            deviceCustomName = uiDeviceName
+            self.deviceCustomName = uiDeviceName
         }
         
         // Initialize calendar entries (one for each month)
-        initializeCalendarEntries()
+        self.initializeCalendarEntries()
         
         // Load saved calendar entries from UserDefaults
-        loadCalendarEntries()
+        self.loadCalendarEntries()
         
-        addDebugMessage("Initialized BluetoothManager with device name: \(deviceCustomName)")
+        self.addDebugMessage("Initialized BluetoothManager with device name: \(self.deviceCustomName)")
         
         // Scanning will automatically start once Bluetooth is powered on
     }
@@ -105,12 +136,12 @@ class BluetoothManager: NSObject, ObservableObject {
     // Initialize calendar entries for all 12 months
     private func initializeCalendarEntries() {
         // Only initialize if we don't have entries yet
-        if calendarEntries.isEmpty {
+        if self.calendarEntries.isEmpty {
             for month in 1...12 {
                 let entry = CalendarEntry(month: month)
-                calendarEntries.append(entry)
+                self.calendarEntries.append(entry)
             }
-            addDebugMessage("Initialized 12 empty calendar entries")
+            self.addDebugMessage("Initialized 12 empty calendar entries")
         }
     }
     
@@ -119,8 +150,8 @@ class BluetoothManager: NSObject, ObservableObject {
         if let savedData = UserDefaults.standard.data(forKey: "CalendarEntries") {
             let decoder = JSONDecoder()
             if let loadedEntries = try? decoder.decode([CalendarEntry].self, from: savedData) {
-                calendarEntries = loadedEntries
-                addDebugMessage("Loaded \(loadedEntries.count) calendar entries from UserDefaults")
+                self.calendarEntries = loadedEntries
+                self.addDebugMessage("Loaded \(loadedEntries.count) calendar entries from UserDefaults")
             }
         }
     }
@@ -128,33 +159,33 @@ class BluetoothManager: NSObject, ObservableObject {
     // Save calendar entries to UserDefaults
     func saveCalendarEntries() {
         let encoder = JSONEncoder()
-        if let encodedData = try? encoder.encode(calendarEntries) {
+        if let encodedData = try? encoder.encode(self.calendarEntries) {
             UserDefaults.standard.set(encodedData, forKey: "CalendarEntries")
-            addDebugMessage("Saved \(calendarEntries.count) calendar entries to UserDefaults")
+            self.addDebugMessage("Saved \(self.calendarEntries.count) calendar entries to UserDefaults")
         }
     }
     
     // Update a calendar entry
     func updateCalendarEntry(forMonth month: Int, title: String, location: String, day: Int = 1) {
-        if let index = calendarEntries.firstIndex(where: { $0.month == month }) {
-            calendarEntries[index].title = title
-            calendarEntries[index].location = location
-            calendarEntries[index].day = day
-            addDebugMessage("Updated calendar entry for month \(month), day \(day)")
-            saveCalendarEntries()
+        if let index = self.calendarEntries.firstIndex(where: { $0.month == month }) {
+            self.calendarEntries[index].title = title
+            self.calendarEntries[index].location = location
+            self.calendarEntries[index].day = day
+            self.addDebugMessage("Updated calendar entry for month \(month), day \(day)")
+            self.saveCalendarEntries()
         } else {
             // If entry doesn't exist for this month, create it
             let newEntry = CalendarEntry(title: title, location: location, month: month, day: day)
-            calendarEntries.append(newEntry)
-            addDebugMessage("Created new calendar entry for month \(month), day \(day)")
-            saveCalendarEntries()
+            self.calendarEntries.append(newEntry)
+            self.addDebugMessage("Created new calendar entry for month \(month), day \(day)")
+            self.saveCalendarEntries()
         }
     }
     
     // Add sample calendar entries
     func populateSampleCalendarEntries() {
         // Clear existing entries
-        calendarEntries.removeAll()
+        self.calendarEntries.removeAll()
         
         // Add one entry for each month with sample data
         let events = [
@@ -178,19 +209,19 @@ class BluetoothManager: NSObject, ObservableObject {
                 month: month,
                 day: day
             )
-            calendarEntries.append(entry)
-            addDebugMessage("Added sample entry for month \(month), day \(day)")
+            self.calendarEntries.append(entry)
+            self.addDebugMessage("Added sample entry for month \(month), day \(day)")
         }
         
         // Save the entries
-        saveCalendarEntries()
-        addDebugMessage("Sample calendar entries populated successfully")
+        self.saveCalendarEntries()
+        self.addDebugMessage("Sample calendar entries populated successfully")
     }
     
     // Add debug message to the log - both UI and console
     func addDebugMessage(_ message: String) {
         print("DEBUG: \(message)")
-        DispatchQueue.main.async {
+        self.updateOnMainThread {
             self.debugMessages.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
             
             // Keep only last 100 messages to avoid memory issues
@@ -200,21 +231,36 @@ class BluetoothManager: NSObject, ObservableObject {
         }
     }
     
+    // Helper to ensure updates happen on main thread
+    private func updateOnMainThread(_ block: @escaping () -> Void) {
+        if Thread.isMainThread {
+            block()
+        } else {
+            DispatchQueue.main.async {
+                block()
+            }
+        }
+    }
+    
     // Start a scanning operation that doesn't immediately update the UI
     func performRefresh() {
-        guard centralManager.state == .poweredOn else {
-            scanningState = .notScanning
+        guard self.centralManager.state == .poweredOn else {
+            self.updateOnMainThread {
+                self.scanningState = .notScanning
+            }
             return
         }
         
         // Set state to refreshing which indicates we're getting data but not showing it yet
-        scanningState = .refreshing
+        self.updateOnMainThread {
+            self.scanningState = .refreshing
+        }
         
         // Clear the temporary array
-        tempDiscoveredDevices.removeAll()
+        self.tempDiscoveredDevices.removeAll()
         
         // Start the Bluetooth scan
-        centralManager.scanForPeripherals(withServices: nil, options: [
+        self.centralManager.scanForPeripherals(withServices: nil, options: [
             CBCentralManagerScanOptionAllowDuplicatesKey: false
         ])
         
@@ -227,26 +273,24 @@ class BluetoothManager: NSObject, ObservableObject {
     // Commit the discovered devices to the published array after scan completes
     private func finalizeRefresh() {
         // Stop the scan
-        centralManager.stopScan()
+        self.centralManager.stopScan()
         
         // Update the last scan date
-        lastScanDate = Date()
+        self.lastScanDate = Date()
         
         // Debug logging for temp list
-        addDebugMessage("Finalizing refresh with \(tempDiscoveredDevices.count) discovered devices")
-        for (index, device) in tempDiscoveredDevices.enumerated() {
-            addDebugMessage("Temp device #\(index): \(device.name) (ID: \(device.id))")
+        self.addDebugMessage("Finalizing refresh with \(self.tempDiscoveredDevices.count) discovered devices")
+        for (index, device) in self.tempDiscoveredDevices.enumerated() {
+            self.addDebugMessage("Temp device #\(index): \(device.name) (ID: \(device.id))")
         }
         
         // Update the published array all at once to avoid flickering
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            
+        self.updateOnMainThread {
             // Only update if we're in refreshing state (not if the user cancelled)
             if self.scanningState == .refreshing {
                 // Debug logging for old list
                 for (index, device) in self.discoveredDevices.enumerated() {
-                    addDebugMessage("Previous device #\(index): \(device.name) (ID: \(device.id))")
+                    self.addDebugMessage("Previous device #\(index): \(device.name) (ID: \(device.id))")
                 }
                 
                 // Instead of replacing the entire array, just update RSSI and isSameApp status
@@ -275,21 +319,21 @@ class BluetoothManager: NSObject, ObservableObject {
                         if (oldName == "iPhone" || oldName == "Unknown Device") && 
                            (newName.contains("'") || newName.contains(" ")) {
                             updatedDevice.name = newName
-                            addDebugMessage("Upgraded name from \"\(oldName)\" to better name: \"\(newName)\"")
+                            self.addDebugMessage("Upgraded name from \"\(oldName)\" to better name: \"\(newName)\"")
                         } else {
-                            addDebugMessage("Kept existing name: \"\(oldName)\" (temp name was: \"\(newName)\")")
+                            self.addDebugMessage("Kept existing name: \"\(oldName)\" (temp name was: \"\(newName)\")")
                         }
                         
                         updatedDevices.append(updatedDevice)
                     } else {
                         // This is a new device, add it as is
                         updatedDevices.append(tempDevice)
-                        addDebugMessage("Added new device: \"\(tempDevice.name)\"")
+                        self.addDebugMessage("Added new device: \"\(tempDevice.name)\"")
                     }
                 }
                 
                 // Sort the final list
-                updatedDevices.sort { first, second in
+                updatedDevices.sort { [self] first, second in
                     if first.signalCategory != second.signalCategory {
                         return first.signalCategory < second.signalCategory
                     }
@@ -300,21 +344,23 @@ class BluetoothManager: NSObject, ObservableObject {
                 self.scanningState = .notScanning
                 
                 // Debug logging for new list
-                addDebugMessage("Updated device list now has \(self.discoveredDevices.count) devices")
+                self.addDebugMessage("Updated device list now has \(self.discoveredDevices.count) devices")
             }
         }
     }
     
     // Start a normal scan operation
     func startScanning() {
-        guard centralManager.state == .poweredOn else {
+        guard self.centralManager.state == .poweredOn else {
             return
         }
         
-        scanningState = .scanning
-        discoveredDevices.removeAll()
+        self.updateOnMainThread {
+            self.scanningState = .scanning
+            self.discoveredDevices.removeAll()
+        }
         
-        centralManager.scanForPeripherals(withServices: nil, options: [
+        self.centralManager.scanForPeripherals(withServices: nil, options: [
             CBCentralManagerScanOptionAllowDuplicatesKey: false
         ])
         
@@ -326,30 +372,38 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Stop any ongoing scan
     func stopScanning() {
-        centralManager.stopScan()
-        scanningState = .notScanning
+        self.centralManager.stopScan()
+        self.updateOnMainThread {
+            self.scanningState = .notScanning
+        }
     }
     
     // Cancel a refresh operation
     func cancelRefresh() {
         if scanningState == .refreshing {
-            centralManager.stopScan()
-            scanningState = .notScanning
+            self.centralManager.stopScan()
+            self.updateOnMainThread {
+                self.scanningState = .notScanning
+            }
         }
     }
     
     func connect(to device: BluetoothDevice, completionHandler: ((Bool) -> Void)? = nil) {
-        isConnecting = true
-        addDebugMessage("Attempting to connect to \(device.name)")
+        self.updateOnMainThread {
+            self.isConnecting = true
+        }
+        self.addDebugMessage("Attempting to connect to \(device.name)")
         
         if let peripheral = device.peripheral {
             // Store the completion handler
             self.connectionCompletionHandler = completionHandler
-            centralManager.connect(peripheral, options: nil)
+            self.centralManager.connect(peripheral, options: nil)
         } else {
-            isConnecting = false
-            error = "Cannot connect to this device"
-            addDebugMessage("Error: No peripheral available to connect to")
+            self.updateOnMainThread {
+                self.isConnecting = false
+                self.error = "Cannot connect to this device"
+            }
+            self.addDebugMessage("Error: No peripheral available to connect to")
             completionHandler?(false)
         }
     }
@@ -358,17 +412,19 @@ class BluetoothManager: NSObject, ObservableObject {
     private var connectionCompletionHandler: ((Bool) -> Void)?
     
     func disconnect() {
-        if let peripheral = peripheral {
-            centralManager.cancelPeripheralConnection(peripheral)
+        if let peripheral = self.peripheral {
+            self.centralManager.cancelPeripheralConnection(peripheral)
         }
-        connectedDevice = nil
-        characteristics = []
-        services = []
+        self.updateOnMainThread {
+            self.connectedDevice = nil
+            self.characteristics = []
+            self.services = []
+        }
     }
     
     // Get the date of the last scan
     func getLastScanDate() -> Date {
-        return lastScanDate
+        return self.lastScanDate
     }
     
     // Helper function to determine if a name is a "good" name
@@ -379,7 +435,7 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Helper function to update transfer state and progress atomically
     private func updateTransferState(_ newState: TransferState, progress: Double) {
-        DispatchQueue.main.async {
+        self.updateOnMainThread {
             // Only allow forward state transitions
             if self.transferState.rawValue < newState.rawValue {
                 self.transferState = newState
@@ -394,18 +450,18 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Send calendar data to a specific device
     func sendCalendarData(to device: BluetoothDevice) {
-        addDebugMessage("Preparing to send calendar data to \(device.name)")
+        self.addDebugMessage("Preparing to send calendar data to \(device.name)")
         
         guard let peripheral = device.peripheral else {
-            addDebugMessage("Error: Cannot send calendar data - no peripheral")
+            self.addDebugMessage("Error: Cannot send calendar data - no peripheral")
             return
         }
         
         // Create a new calendar data object with all of our entries
-        let calendarData = CalendarData(senderName: deviceCustomName, entries: calendarEntries)
+        let calendarData = CalendarData(senderName: self.deviceCustomName, entries: self.calendarEntries)
         
         // Reset transfer state completely
-        DispatchQueue.main.async {
+        self.updateOnMainThread {
             self.transferProgress = 0.0
             self.transferState = .notStarted
             self.transferSuccess = nil
@@ -413,10 +469,10 @@ class BluetoothManager: NSObject, ObservableObject {
             self.sendingCalendarData = true
         }
         
-        addDebugMessage("Connecting to \(device.name) to send calendar data...")
+        self.addDebugMessage("Connecting to \(device.name) to send calendar data...")
         
         // Update to connecting state
-        updateTransferState(.connecting, progress: 0.1) // 10% - Starting connection
+        self.updateTransferState(.connecting, progress: 0.1) // 10% - Starting connection
         
         // Connect to the device if not already connected
         if !device.isConnected {
@@ -432,7 +488,7 @@ class BluetoothManager: NSObject, ObservableObject {
                     self.addDebugMessage("Failed to connect to \(device.name)")
                     
                     // Update to failed state
-                    DispatchQueue.main.async {
+                    self.updateOnMainThread {
                         self.transferState = .failed
                         self.sendingCalendarData = false
                         self.transferSuccess = false
@@ -456,7 +512,7 @@ class BluetoothManager: NSObject, ObservableObject {
     private func discoverServices(peripheral: CBPeripheral, calendarData: CalendarData) {
         peripheral.delegate = self
         
-        addDebugMessage("Discovering services for \(peripheral.name ?? "Unknown")")
+        self.addDebugMessage("Discovering services for \(peripheral.name ?? "Unknown")")
         peripheral.discoverServices([calendarServiceUUID])
     }
     
@@ -473,7 +529,7 @@ class BluetoothManager: NSObject, ObservableObject {
         let chunkSize = 60  // Even smaller chunk size to avoid queue overflow
         let totalChunks = (data.count / chunkSize) + (data.count % chunkSize > 0 ? 1 : 0)
         
-        addDebugMessage("Breaking data into \(totalChunks) smaller chunks")
+        self.addDebugMessage("Breaking data into \(totalChunks) smaller chunks")
         
         // Store for retries if needed
         self.pendingData = data
@@ -481,7 +537,7 @@ class BluetoothManager: NSObject, ObservableObject {
         self.pendingCharacteristic = characteristic
         
         // Update to preparing data state
-        updateTransferState(.preparingData, progress: 0.3)
+        self.updateTransferState(.preparingData, progress: 0.3)
         
         // Schedule sending all chunks with INCREASED delays between them
         for chunkIndex in 0..<totalChunks {
@@ -547,12 +603,12 @@ class BluetoothManager: NSObject, ObservableObject {
         writeRetryCount += 1
         
         if writeRetryCount > maxRetryAttempts {
-            addDebugMessage("Exceeded maximum retry attempts")
+            self.addDebugMessage("Exceeded maximum retry attempts")
             finishCalendarDataSending(success: false, errorMessage: "Failed after \(maxRetryAttempts) retry attempts")
             return
         }
         
-        addDebugMessage("Retrying write operation (attempt \(writeRetryCount))")
+        self.addDebugMessage("Retrying write operation (attempt \(writeRetryCount))")
         
         // Use increasingly longer delays for retries
         let delay = Double(writeRetryCount) * 2.0
@@ -569,7 +625,7 @@ class BluetoothManager: NSObject, ObservableObject {
     private func writeCalendarDataToCharacteristic(calendarData: CalendarData, characteristic: CBCharacteristic, peripheral: CBPeripheral) {
         // Prevent duplicate writes when discovering multiple services
         guard !hasAttemptedWrite else {
-            addDebugMessage("Already attempted write, skipping duplicate")
+            self.addDebugMessage("Already attempted write, skipping duplicate")
             return
         }
         
@@ -578,10 +634,10 @@ class BluetoothManager: NSObject, ObservableObject {
         hasAttemptedWrite = true
         
         // Debug the calendar data being sent
-        addDebugMessage("Calendar data to send:")
-        addDebugMessage("- Sender: \(calendarData.senderName)")
-        addDebugMessage("- Timestamp: \(calendarData.timestamp)")
-        addDebugMessage("- Number of entries: \(calendarData.entries.count)")
+        self.addDebugMessage("Calendar data to send:")
+        self.addDebugMessage("- Sender: \(calendarData.senderName)")
+        self.addDebugMessage("- Timestamp: \(calendarData.timestamp)")
+        self.addDebugMessage("- Number of entries: \(calendarData.entries.count)")
         
         // DRASTICALLY REDUCE data size by sending only essential information
         // Create a single simplified dictionary instead of full JSON objects
@@ -598,8 +654,8 @@ class BluetoothManager: NSObject, ObservableObject {
         
         // Convert to JSON data with minimum overhead
         guard let data = try? JSONSerialization.data(withJSONObject: simpleData, options: []) else {
-            addDebugMessage("Error: Failed to convert simplified calendar data to JSON")
-            DispatchQueue.main.async {
+            self.addDebugMessage("Error: Failed to convert simplified calendar data to JSON")
+            self.updateOnMainThread {
                 self.sendingCalendarData = false
                 self.hasAttemptedWrite = false
                 self.error = "Failed to convert calendar data to JSON"
@@ -609,10 +665,10 @@ class BluetoothManager: NSObject, ObservableObject {
         
         // Try to print the JSON as string for debugging
         if let jsonString = String(data: data, encoding: .utf8) {
-            addDebugMessage("JSON data (simplified): \(jsonString)")
+            self.addDebugMessage("JSON data (simplified): \(jsonString)")
         }
         
-        addDebugMessage("Writing simplified calendar data (\(data.count) bytes) to characteristic")
+        self.addDebugMessage("Writing simplified calendar data (\(data.count) bytes) to characteristic")
         
         // Use chunking approach to avoid queue overflow
         writeSmallChunks(data: data, characteristic: characteristic, peripheral: peripheral)
@@ -628,12 +684,12 @@ class BluetoothManager: NSObject, ObservableObject {
         }
         
         if success {
-            addDebugMessage("Calendar data sent successfully!")
+            self.addDebugMessage("Calendar data sent successfully!")
             // Progress updates will be handled by state transitions
             // BUT DO NOT SET SUCCESS FLAG HERE - it will be set later in a single atomic update
         } else {
-            addDebugMessage("Failed to send calendar data: \(errorMessage ?? "Unknown error")")
-            DispatchQueue.main.async {
+            self.addDebugMessage("Failed to send calendar data: \(errorMessage ?? "Unknown error")")
+            self.updateOnMainThread {
                 // Set all error state in one atomic update
                 self.error = errorMessage
                 self.transferError = errorMessage
@@ -673,7 +729,7 @@ class BluetoothManager: NSObject, ObservableObject {
                 
                 // Only now transition to complete state
                 // State changes and UI updates happen in order with no race conditions
-                DispatchQueue.main.async {
+                self.updateOnMainThread {
                     // Transition to complete state
                     self.updateTransferState(.complete, progress: 1.0)
                     
@@ -684,23 +740,23 @@ class BluetoothManager: NSObject, ObservableObject {
                     
                     // Immediately transition to the "complete" state and mark transfer as successful
                     // Setting these values together in a single synchronous block ensures they're seen as one update
-                    DispatchQueue.main.async {
-                        // First set the state and progress
-                        self.updateTransferState(.complete, progress: 1.0)
-                        
-                        // The isCleaningUp flag will prevent any other timers from changing the state
-                        self.isCleaningUp = true
-                        
-                        if success {
-                            // Set success flag in the same atomic update
-                            self.transferSuccess = true
-                        }
+                    // The isCleaningUp flag will prevent any other timers from changing the state
+                    self.isCleaningUp = true
+                    
+                    if success {
+                        // Set success flag in the same atomic update
+                        self.transferSuccess = true
                     }
+                }
                     
                     // After a short delay, hide the progress indicators but keep the success message
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                        guard let self = self else { return }
+                        
                         // Only hide the progress indicators, keep success message visible
-                        self.sendingCalendarData = false
+                        self.updateOnMainThread {
+                            self.sendingCalendarData = false
+                        }
                     }
                     
                     // Set a single timer for removing the success message - after a fixed delay
@@ -708,7 +764,7 @@ class BluetoothManager: NSObject, ObservableObject {
                         guard let self = self else { return }
                         
                         // Final reset - all at once to avoid multiple updates
-                        DispatchQueue.main.async {
+                        self.updateOnMainThread {
                             // Reset everything in one atomic update
                             self.transferSuccess = nil
                             self.transferError = nil
@@ -721,10 +777,9 @@ class BluetoothManager: NSObject, ObservableObject {
                 }
             }
         }
-    }
     
-    // Temp holder for scan results - doesn't trigger UI updates
-    private func addDiscoveredDevice(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool, overrideName: String? = nil) {
+    // Private method to add and process discovered Bluetooth devices
+    private func addDiscoveredDevice(_ peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool, overrideName: String? = nil) {
         let currentRssi = rssi.intValue
         
         // Use the override name if provided, otherwise fall back to peripheral.name
@@ -809,75 +864,77 @@ class BluetoothManager: NSObject, ObservableObject {
         // Use the override name if provided, otherwise fall back to peripheral.name
         var deviceName = overrideName ?? peripheral.name ?? "Unknown Device"
         
-        if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
-            // Update existing device
-            discoveredDevices[index].updateRssi(currentRssi)
-            discoveredDevices[index].isSameApp = isSameApp
-            
-            // Current name vs new name
-            let currentName = discoveredDevices[index].name
-            
-            // Log device info
-            addDebugMessage("Live device #\(index): Current name: \"\(currentName)\", New name: \"\(deviceName)\"")
-            
-            // TEMP FIX - ALWAYS SET "iPhone" TO "Andrew's iPhone" OR "Tango Foxtrot"
-            if currentName == "iPhone" {
-                // Differentiate based on the device ID to avoid all iPhones becoming "Andrew's iPhone"
-                if discoveredDevices[index].id.uuidString.contains("1") {
-                    discoveredDevices[index].name = "Andrew's iPhone"
-                    addDebugMessage("OVERRIDE: Set iPhone to Andrew's iPhone")
-                } else {
-                    discoveredDevices[index].name = "Tango Foxtrot"
-                    addDebugMessage("OVERRIDE: Set iPhone to Tango Foxtrot")
+        self.updateOnMainThread {
+            if let index = self.discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
+                // Update existing device
+                self.discoveredDevices[index].updateRssi(currentRssi)
+                self.discoveredDevices[index].isSameApp = isSameApp
+                
+                // Current name vs new name
+                let currentName = self.discoveredDevices[index].name
+                
+                // Log device info
+                self.addDebugMessage("Live device #\(index): Current name: \"\(currentName)\", New name: \"\(deviceName)\"")
+                
+                // TEMP FIX - ALWAYS SET "iPhone" TO "Andrew's iPhone" OR "Tango Foxtrot"
+                if currentName == "iPhone" {
+                    // Differentiate based on the device ID to avoid all iPhones becoming "Andrew's iPhone"
+                    if self.discoveredDevices[index].id.uuidString.contains("1") {
+                        self.discoveredDevices[index].name = "Andrew's iPhone"
+                        self.addDebugMessage("OVERRIDE: Set iPhone to Andrew's iPhone")
+                    } else {
+                        self.discoveredDevices[index].name = "Tango Foxtrot"
+                        self.addDebugMessage("OVERRIDE: Set iPhone to Tango Foxtrot")
+                    }
                 }
-            }
-            // Check if deviceName is better than currentName
-            else if (currentName == "iPhone" || currentName == "Unknown Device") && isGoodName(deviceName) {
-                discoveredDevices[index].name = deviceName
-                addDebugMessage("Upgraded live device name from \"\(currentName)\" to \"\(deviceName)\"")
-            } 
-            // Keep good names
-            else if isGoodName(currentName) {
-                addDebugMessage("Keeping good live device name: \"\(currentName)\"")
-            } 
-            // Handle unknowns
-            else if deviceName != "Unknown Device" && currentName == "Unknown Device" {
-                discoveredDevices[index].name = deviceName
-                addDebugMessage("Updated unknown live device name to: \"\(deviceName)\"")
-            }
-        } else {
-            // HARD-CODED OVERRIDE - if it's an iPhone, use a friendly name
-            var finalDeviceName = deviceName
-            if deviceName == "iPhone" {
-                // Assign friendly names based on device ID to differentiate devices
-                if peripheral.identifier.uuidString.contains("1") {
-                    finalDeviceName = "Andrew's iPhone" 
-                    addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Andrew's iPhone")
-                } else {
-                    finalDeviceName = "Tango Foxtrot"
-                    addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Tango Foxtrot")
+                // Check if deviceName is better than currentName
+                else if (currentName == "iPhone" || currentName == "Unknown Device") && self.isGoodName(deviceName) {
+                    self.discoveredDevices[index].name = deviceName
+                    self.addDebugMessage("Upgraded live device name from \"\(currentName)\" to \"\(deviceName)\"")
+                } 
+                // Keep good names
+                else if self.isGoodName(currentName) {
+                    self.addDebugMessage("Keeping good live device name: \"\(currentName)\"")
+                } 
+                // Handle unknowns
+                else if deviceName != "Unknown Device" && currentName == "Unknown Device" {
+                    self.discoveredDevices[index].name = deviceName
+                    self.addDebugMessage("Updated unknown live device name to: \"\(deviceName)\"")
                 }
+            } else {
+                // HARD-CODED OVERRIDE - if it's an iPhone, use a friendly name
+                var finalDeviceName = deviceName
+                if deviceName == "iPhone" {
+                    // Assign friendly names based on device ID to differentiate devices
+                    if peripheral.identifier.uuidString.contains("1") {
+                        finalDeviceName = "Andrew's iPhone" 
+                        self.addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Andrew's iPhone")
+                    } else {
+                        finalDeviceName = "Tango Foxtrot"
+                        self.addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Tango Foxtrot")
+                    }
+                }
+                
+                // Add new device with the potentially overridden name
+                let newDevice = BluetoothDevice(
+                    peripheral: peripheral,
+                    name: finalDeviceName,
+                    rssi: currentRssi,
+                    isSameApp: isSameApp
+                )
+                self.discoveredDevices.append(newDevice)
             }
             
-            // Add new device with the potentially overridden name
-            let newDevice = BluetoothDevice(
-                peripheral: peripheral,
-                name: finalDeviceName,
-                rssi: currentRssi,
-                isSameApp: isSameApp
-            )
-            discoveredDevices.append(newDevice)
-        }
-        
-        // Sort devices by signal strength
-        discoveredDevices.sort { first, second in
-            // First by signal category
-            if first.signalCategory != second.signalCategory {
-                return first.signalCategory < second.signalCategory
+            // Sort devices by signal strength
+            self.discoveredDevices.sort { [self] first, second in
+                // First by signal category
+                if first.signalCategory != second.signalCategory {
+                    return first.signalCategory < second.signalCategory
+                }
+                
+                // Then by name
+                return first.name < second.name
             }
-            
-            // Then by name
-            return first.name < second.name
         }
     }
 }
@@ -896,23 +953,35 @@ extension BluetoothManager: CBCentralManagerDelegate {
             startAdvertising()
         case .poweredOff:
             print("Bluetooth is powered off")
-            error = "Bluetooth is powered off"
-            scanningState = .notScanning
+            self.updateOnMainThread {
+                self.error = "Bluetooth is powered off"
+                self.scanningState = .notScanning
+            }
         case .resetting:
             print("Bluetooth is resetting")
-            error = "Bluetooth is resetting"
+            self.updateOnMainThread {
+                self.error = "Bluetooth is resetting"
+            }
         case .unauthorized:
             print("Bluetooth is unauthorized")
-            error = "Bluetooth use is unauthorized"
+            self.updateOnMainThread {
+                self.error = "Bluetooth use is unauthorized"
+            }
         case .unsupported:
             print("Bluetooth is unsupported")
-            error = "Bluetooth is unsupported on this device"
+            self.updateOnMainThread {
+                self.error = "Bluetooth is unsupported on this device"
+            }
         case .unknown:
             print("Bluetooth state is unknown")
-            error = "Bluetooth state is unknown"
+            self.updateOnMainThread {
+                self.error = "Bluetooth state is unknown"
+            }
         @unknown default:
             print("Unknown Bluetooth state")
-            error = "Unknown Bluetooth state"
+            self.updateOnMainThread {
+                self.error = "Unknown Bluetooth state"
+            }
         }
     }
     
@@ -930,7 +999,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
             // A good name contains spaces or apostrophes (like "Andrew's iPhone" or "Tango Foxtrot")
             if existingName!.contains(" ") || existingName!.contains("'") {
                 hasGoodName = true
-                addDebugMessage("Already have a good name for this device: \"\(existingName!)\"")
+                self.addDebugMessage("Already have a good name for this device: \"\(existingName!)\"")
             }
         }
         
@@ -944,25 +1013,25 @@ extension BluetoothManager: CBCentralManagerDelegate {
             
             // Start with basic name but immediately look for better names
             deviceName = peripheral.name ?? "Unknown Device"
-            addDebugMessage("1. Base peripheral.name: \"\(deviceName)\"")
+            self.addDebugMessage("1. Base peripheral.name: \"\(deviceName)\"")
             
             // HARD-CODED VALUES FOR TESTING - DELETE LATER
             // This is to force specific device names for debugging
             if deviceName == "iPhone" {
                 deviceName = "Andrew's iPhone"
-                addDebugMessage("OVERRIDE: Forcing name to \"Andrew's iPhone\"")
+                self.addDebugMessage("OVERRIDE: Forcing name to \"Andrew's iPhone\"")
             }
             
             // Dump all advertisement data for debugging
-            addDebugMessage("ADVERTISEMENT DATA DUMP:")
+            self.addDebugMessage("ADVERTISEMENT DATA DUMP:")
             for (key, value) in advertisementData {
-                addDebugMessage("   Key: \(key), Value: \(value)")
+                self.addDebugMessage("   Key: \(key), Value: \(value)")
                 
                 // Look for any key that might contain a name with a space or apostrophe
                 if let valueString = value as? String, 
                    (valueString.contains(" ") || valueString.contains("'")) {
                     deviceName = valueString
-                    addDebugMessage("Found good name in value: \"\(valueString)\"")
+                    self.addDebugMessage("Found good name in value: \"\(valueString)\"")
                 }
             }
             
@@ -971,27 +1040,27 @@ extension BluetoothManager: CBCentralManagerDelegate {
                 // If the local name contains space or apostrophe, it's likely better than "iPhone"
                 if localName.contains(" ") || localName.contains("'") {
                     deviceName = localName
-                    addDebugMessage("2. Using better name from LocalNameKey: \"\(localName)\"")
+                    self.addDebugMessage("2. Using better name from LocalNameKey: \"\(localName)\"")
                 } else {
-                    addDebugMessage("2. LocalNameKey name not clearly better: \"\(localName)\"")
+                    self.addDebugMessage("2. LocalNameKey name not clearly better: \"\(localName)\"")
                 }
             }
         }
         
         // Log the exact name we'll be using
-        addDebugMessage("Using device name: \"\(deviceName)\" for peripheral: \(peripheral.identifier)")
+        self.addDebugMessage("Using device name: \"\(deviceName)\" for peripheral: \(peripheral.identifier)")
         
         // Log all advertisement data for debugging
         if let keys = advertisementData.keys.map({ String(describing: $0) }) as? [String] {
-            addDebugMessage("Advertisement data contains keys: \(keys.joined(separator: ", "))")
+            self.addDebugMessage("Advertisement data contains keys: \(keys.joined(separator: ", "))")
         }
         
         // Update the appropriate list based on scanning state
-        DispatchQueue.main.async {
+        self.updateOnMainThread {
             switch self.scanningState {
             case .refreshing:
                 // During refresh, update the temporary list
-                self.addDiscoveredDevice(peripheral: peripheral, rssi: RSSI, isSameApp: isSameApp, overrideName: deviceName)
+                self.addDiscoveredDevice(peripheral, rssi: RSSI, isSameApp: isSameApp, overrideName: deviceName)
                 
             case .scanning:
                 // During normal scanning, update the visible list
@@ -1005,17 +1074,19 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        addDebugMessage("Connected to peripheral: \(peripheral.name ?? peripheral.identifier.uuidString)")
+        self.addDebugMessage("Connected to peripheral: \(peripheral.name ?? peripheral.identifier.uuidString)")
         self.peripheral = peripheral
         peripheral.delegate = self
         
-        // Update device status
-        if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
-            discoveredDevices[index].isConnected = true
-            connectedDevice = discoveredDevices[index]
+        // Update device status on main thread
+        self.updateOnMainThread {
+            if let index = self.discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
+                self.discoveredDevices[index].isConnected = true
+                self.connectedDevice = self.discoveredDevices[index]
+            }
+            
+            self.isConnecting = false
         }
-        
-        isConnecting = false
         
         // Call the completion handler (but don't discover services here if we're doing messaging)
         // The completion handler will trigger service discovery itself
@@ -1024,17 +1095,19 @@ extension BluetoothManager: CBCentralManagerDelegate {
         
         // Discover services only if we're not handling this via the completion handler
         if connectedDevice != nil && peripheral.services == nil {
-            addDebugMessage("Discovering all services...")
+            self.addDebugMessage("Discovering all services...")
             peripheral.discoverServices(nil)
         }
     }
     
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         let errorMsg = error?.localizedDescription ?? "Failed to connect"
-        addDebugMessage("Failed to connect: \(errorMsg)")
+        self.addDebugMessage("Failed to connect: \(errorMsg)")
         
-        isConnecting = false
-        self.error = errorMsg
+        self.updateOnMainThread {
+            self.isConnecting = false
+            self.error = errorMsg
+        }
         
         // Call the completion handler with failure
         connectionCompletionHandler?(false)
@@ -1042,12 +1115,28 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        if let index = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
-            discoveredDevices[index].isConnected = false
+        self.updateOnMainThread {
+            if let index = self.discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
+                self.discoveredDevices[index].isConnected = false
+            }
+            self.connectedDevice = nil
+            self.characteristics = []
+            self.services = []
         }
-        connectedDevice = nil
-        characteristics = []
-        services = []
+    }
+    
+    // Required for restoration identifiers
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+        print("DEBUG: Main BluetoothManager - willRestoreState called")
+        self.addDebugMessage("Bluetooth state being restored")
+        
+        // Process any restored peripherals if needed
+        if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
+            self.addDebugMessage("Restored \(peripherals.count) peripherals")
+            for peripheral in peripherals {
+                self.addDebugMessage("Restored peripheral: \(peripheral.name ?? "Unknown")")
+            }
+        }
     }
 }
 
@@ -1056,21 +1145,21 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         switch peripheral.state {
         case .poweredOn:
-            addDebugMessage("Peripheral Bluetooth is powered on")
+            self.addDebugMessage("Peripheral Bluetooth is powered on")
             setupCalendarService()
             startAdvertising()
         case .poweredOff:
-            addDebugMessage("Peripheral Bluetooth is powered off")
+            self.addDebugMessage("Peripheral Bluetooth is powered off")
         case .resetting:
-            addDebugMessage("Peripheral Bluetooth is resetting")
+            self.addDebugMessage("Peripheral Bluetooth is resetting")
         case .unauthorized:
-            addDebugMessage("Peripheral Bluetooth is unauthorized")
+            self.addDebugMessage("Peripheral Bluetooth is unauthorized")
         case .unsupported:
-            addDebugMessage("Peripheral Bluetooth is unsupported")
+            self.addDebugMessage("Peripheral Bluetooth is unsupported")
         case .unknown:
-            addDebugMessage("Peripheral Bluetooth state is unknown")
+            self.addDebugMessage("Peripheral Bluetooth state is unknown")
         @unknown default:
-            addDebugMessage("Unknown peripheral Bluetooth state")
+            self.addDebugMessage("Unknown peripheral Bluetooth state")
         }
     }
     
@@ -1078,11 +1167,11 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     private func setupCalendarService() {
         // Only proceed if Bluetooth is powered on
         guard peripheralManager.state == .poweredOn else {
-            addDebugMessage("Cannot setup calendar service - Bluetooth peripheral is not powered on")
+            self.addDebugMessage("Cannot setup calendar service - Bluetooth peripheral is not powered on")
             return
         }
         
-        addDebugMessage("Setting up calendar service for receiving calendar data")
+        self.addDebugMessage("Setting up calendar service for receiving calendar data")
         
         // Create the characteristic for calendar data
         calendarCharacteristic = CBMutableCharacteristic(
@@ -1099,37 +1188,37 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         calendarService.characteristics = [calendarCharacteristic!]
         
         // Add the service to the peripheral manager
-        peripheralManager.add(calendarService)
+        self.peripheralManager.add(calendarService)
         
-        addDebugMessage("Calendar service setup complete")
+        self.addDebugMessage("Calendar service setup complete")
     }
     
     private func startAdvertising() {
         // Only proceed if Bluetooth is powered on
         guard peripheralManager.state == .poweredOn else {
-            addDebugMessage("Cannot start advertising - Bluetooth peripheral is not powered on")
+            self.addDebugMessage("Cannot start advertising - Bluetooth peripheral is not powered on")
             return
         }
         
-        addDebugMessage("Starting Bluetooth advertising")
+        self.addDebugMessage("Starting Bluetooth advertising")
         
         // Create the app identification service
         let appService = CBMutableService(type: connectWithAppServiceUUID, primary: true)
         appService.characteristics = []
         
         // Add service to peripheral manager
-        peripheralManager.add(appService)
+        self.peripheralManager.add(appService)
         
         // Use the cached device name
-        addDebugMessage("Advertising with device name: \(deviceCustomName)")
+        self.addDebugMessage("Advertising with device name: \(deviceCustomName)")
         
         // Start advertising both services with the personalized device name
-        peripheralManager.startAdvertising([
+        self.peripheralManager.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [connectWithAppServiceUUID, calendarServiceUUID],
             CBAdvertisementDataLocalNameKey: deviceCustomName
         ])
         
-        addDebugMessage("Bluetooth advertising started")
+        self.addDebugMessage("Bluetooth advertising started")
     }
     
     // These lines have been moved to the main class definition
@@ -1137,7 +1226,7 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     // Called when a central device writes to one of our characteristics
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         for request in requests {
-            addDebugMessage("Received write request to characteristic: \(request.characteristic.uuid.uuidString)")
+            self.addDebugMessage("Received write request to characteristic: \(request.characteristic.uuid.uuidString)")
             
             // Check if this is a write to our calendar characteristic
             if request.characteristic.uuid == calendarCharacteristicUUID, let data = request.value {
@@ -1149,25 +1238,25 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                     receivedDataBuffer = data
                     receivedChunkCount = 1
                     lastChunkTimestamp = Date()
-                    addDebugMessage("Started new data reception - chunk 1: \(data.count) bytes")
+                    self.addDebugMessage("Started new data reception - chunk 1: \(data.count) bytes")
                 } else {
                     // Append to existing data collection
                     receivedDataBuffer.append(data)
                     receivedChunkCount += 1
                     lastChunkTimestamp = Date()
-                    addDebugMessage("Received chunk \(receivedChunkCount): \(data.count) bytes, total now \(receivedDataBuffer.count) bytes")
+                    self.addDebugMessage("Received chunk \(receivedChunkCount): \(data.count) bytes, total now \(receivedDataBuffer.count) bytes")
                 }
                 
                 // Try to print the accumulated JSON for debugging
                 if let jsonString = String(data: receivedDataBuffer, encoding: .utf8) {
                     let previewLength = min(100, jsonString.count)
                     let jsonPreview = String(jsonString.prefix(previewLength))
-                    addDebugMessage("Accumulated JSON preview: \(jsonPreview)\(jsonString.count > previewLength ? "..." : "")")
+                    self.addDebugMessage("Accumulated JSON preview: \(jsonPreview)\(jsonString.count > previewLength ? "..." : "")")
                 }
                 
                 // Try to parse the simplified JSON format
                 if let jsonObject = try? JSONSerialization.jsonObject(with: receivedDataBuffer, options: []) as? [String: Any] {
-                    addDebugMessage("Successfully parsed simplified JSON data")
+                    self.addDebugMessage("Successfully parsed simplified JSON data")
                     
                     // Extract fields from the simplified format
                     if let sender = jsonObject["sender"] as? String,
@@ -1191,7 +1280,7 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                                 day: days[i]
                             )
                             entries.append(entry)
-                            addDebugMessage("  - Reconstructed Month \(months[i]), Day \(days[i]): '\(titles[i])' at '\(locations[i])'")
+                            self.addDebugMessage("  - Reconstructed Month \(months[i]), Day \(days[i]): '\(titles[i])' at '\(locations[i])'")
                         }
                         
                         // Create a CalendarData object
@@ -1207,10 +1296,10 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                         receivedChunkCount = 0
                         lastChunkTimestamp = nil
                         
-                        addDebugMessage("Successfully reconstructed calendar data with \(entries.count) entries")
+                        self.addDebugMessage("Successfully reconstructed calendar data with \(entries.count) entries")
                         
                         // Store the received calendar data
-                        DispatchQueue.main.async {
+                        self.updateOnMainThread {
                             self.receivedCalendarData = calendarData
                             
                             // Update our local calendar with the received data
@@ -1220,15 +1309,15 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                             self.showCalendarDataInAppAlert(calendarData: calendarData)
                         }
                     } else {
-                        addDebugMessage("JSON missing required fields - waiting for more chunks")
+                        self.addDebugMessage("JSON missing required fields - waiting for more chunks")
                     }
                 } else {
-                    addDebugMessage("JSON not yet complete or invalid - waiting for more chunks")
+                    self.addDebugMessage("JSON not yet complete or invalid - waiting for more chunks")
                 }
             }
             
             // Respond to the request
-            peripheralManager.respond(to: request, withResult: .success)
+            self.peripheralManager.respond(to: request, withResult: .success)
         }
     }
     
@@ -1244,7 +1333,7 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         if let lastTimestamp = lastChunkTimestamp, 
            Date().timeIntervalSince(lastTimestamp) > 15.0 {
             // It's been too long, start fresh
-            addDebugMessage("Previous transmission timed out after \(receivedChunkCount) chunks - starting fresh")
+            self.addDebugMessage("Previous transmission timed out after \(receivedChunkCount) chunks - starting fresh")
             return true
         }
         
@@ -1255,22 +1344,47 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
     // Update our local calendar with the received data
     private func updateCalendarWithReceivedData(_ calendarData: CalendarData) {
         // Replace our calendar entries with the received ones
-        self.calendarEntries = calendarData.entries
+        self.updateOnMainThread {
+            self.calendarEntries = calendarData.entries
+            
+            // Save the updated calendar entries
+            self.saveCalendarEntries()
+        }
         
-        // Save the updated calendar entries
-        saveCalendarEntries()
-        
-        addDebugMessage("Updated local calendar with \(calendarData.entries.count) entries from \(calendarData.senderName)")
+        self.addDebugMessage("Updated local calendar with \(calendarData.entries.count) entries from \(calendarData.senderName)")
     }
     
     // Called when a central device subscribes to notifications
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
-        addDebugMessage("Central \(central.identifier.uuidString) subscribed to \(characteristic.uuid.uuidString)")
+        self.addDebugMessage("Central \(central.identifier.uuidString) subscribed to \(characteristic.uuid.uuidString)")
     }
     
     // Called when a central device unsubscribes from notifications
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
-        addDebugMessage("Central \(central.identifier.uuidString) unsubscribed from \(characteristic.uuid.uuidString)")
+        self.addDebugMessage("Central \(central.identifier.uuidString) unsubscribed from \(characteristic.uuid.uuidString)")
+    }
+    
+    // Required for peripheral restoration identifier
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
+        print("DEBUG: Peripheral manager - willRestoreState called")
+        self.addDebugMessage("Bluetooth peripheral state being restored")
+        
+        // Restore services if needed
+        if let services = dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService] {
+            self.addDebugMessage("Restored \(services.count) services")
+            for service in services {
+                self.addDebugMessage("Restored service: \(service.uuid.uuidString)")
+                if service.uuid == calendarServiceUUID, let characteristics = service.characteristics {
+                    for characteristic in characteristics {
+                        if characteristic.uuid == calendarCharacteristicUUID {
+                            // Re-save our characteristic reference
+                            self.calendarCharacteristic = (characteristic as! CBMutableCharacteristic)
+                            self.addDebugMessage("Restored calendar characteristic")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1278,25 +1392,29 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
 extension BluetoothManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
-            addDebugMessage("Error discovering services: \(error.localizedDescription)")
-            self.error = "Error discovering services: \(error.localizedDescription)"
+            self.addDebugMessage("Error discovering services: \(error.localizedDescription)")
+            self.updateOnMainThread {
+                self.error = "Error discovering services: \(error.localizedDescription)"
+            }
             finishCalendarDataSending(success: false, errorMessage: "Error discovering services")
             return
         }
         
         if let services = peripheral.services {
-            addDebugMessage("Discovered \(services.count) services")
-            self.services = services
+            self.addDebugMessage("Discovered \(services.count) services")
+            self.updateOnMainThread {
+                self.services = services
+            }
             
             // Check if there's a calendar service among the discovered services
             var foundCalendarService = false
             
             for service in services {
-                addDebugMessage("Service: \(service.uuid.uuidString)")
+                self.addDebugMessage("Service: \(service.uuid.uuidString)")
                 
                 if service.uuid == calendarServiceUUID {
                     foundCalendarService = true
-                    addDebugMessage("Found calendar service")
+                    self.addDebugMessage("Found calendar service")
                     // Discover characteristics for calendar service
                     peripheral.discoverCharacteristics([calendarCharacteristicUUID], for: service)
                 } else {
@@ -1306,12 +1424,12 @@ extension BluetoothManager: CBPeripheralDelegate {
             }
             
             if !foundCalendarService && sendingCalendarData {
-                addDebugMessage("Error: Calendar service not found on device")
+                self.addDebugMessage("Error: Calendar service not found on device")
                 finishCalendarDataSending(success: false, errorMessage: "Calendar service not available on this device")
             }
         } else {
             if sendingCalendarData {
-                addDebugMessage("Error: No services found")
+                self.addDebugMessage("Error: No services found")
                 finishCalendarDataSending(success: false, errorMessage: "No services found on device")
             }
         }
@@ -1319,8 +1437,10 @@ extension BluetoothManager: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let error = error {
-            addDebugMessage("Error discovering characteristics: \(error.localizedDescription)")
-            self.error = "Error discovering characteristics: \(error.localizedDescription)"
+            self.addDebugMessage("Error discovering characteristics: \(error.localizedDescription)")
+            self.updateOnMainThread {
+                self.error = "Error discovering characteristics: \(error.localizedDescription)"
+            }
             
             if service.uuid == calendarServiceUUID && sendingCalendarData {
                 finishCalendarDataSending(success: false, errorMessage: "Error discovering characteristics")
@@ -1329,7 +1449,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
         
         if let characteristics = service.characteristics {
-            addDebugMessage("Discovered \(characteristics.count) characteristics for service \(service.uuid.uuidString)")
+            self.addDebugMessage("Discovered \(characteristics.count) characteristics for service \(service.uuid.uuidString)")
             
             // Check if this is the calendar service
             if service.uuid == calendarServiceUUID {
@@ -1337,11 +1457,11 @@ extension BluetoothManager: CBPeripheralDelegate {
                 var foundCalendarCharacteristic = false
                 
                 for characteristic in characteristics {
-                    addDebugMessage("Characteristic: \(characteristic.uuid.uuidString), properties: \(characteristic.properties.rawValue)")
+                    self.addDebugMessage("Characteristic: \(characteristic.uuid.uuidString), properties: \(characteristic.properties.rawValue)")
                     
                     if characteristic.uuid == calendarCharacteristicUUID {
                         foundCalendarCharacteristic = true
-                        addDebugMessage("Found calendar characteristic")
+                        self.addDebugMessage("Found calendar characteristic")
                         
                         // If we're trying to send calendar data, proceed
                         if sendingCalendarData {
@@ -1351,14 +1471,14 @@ extension BluetoothManager: CBPeripheralDelegate {
                         
                         // Setup notifications for incoming calendar data
                         if characteristic.properties.contains(.notify) {
-                            addDebugMessage("Setting up notifications for calendar characteristic")
+                            self.addDebugMessage("Setting up notifications for calendar characteristic")
                             peripheral.setNotifyValue(true, for: characteristic)
                         }
                     }
                 }
                 
                 if !foundCalendarCharacteristic && sendingCalendarData {
-                    addDebugMessage("Error: Calendar characteristic not found")
+                    self.addDebugMessage("Error: Calendar characteristic not found")
                     finishCalendarDataSending(success: false, errorMessage: "Calendar characteristic not available")
                 }
             } else {
@@ -1371,7 +1491,8 @@ extension BluetoothManager: CBPeripheralDelegate {
                         peripheral.setNotifyValue(true, for: characteristic)
                     }
                     
-                    DispatchQueue.main.async {
+                    // Use our helper method instead of direct DispatchQueue.main.async
+                    self.updateOnMainThread {
                         if !self.characteristics.contains(where: { $0.uuid == characteristic.uuid }) {
                             self.characteristics.append(characteristic)
                         }
@@ -1383,19 +1504,19 @@ extension BluetoothManager: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
-            addDebugMessage("Error updating value: \(error.localizedDescription)")
+            self.addDebugMessage("Error updating value: \(error.localizedDescription)")
             return
         }
         
         // Handle calendar characteristic value updates (incoming calendar data)
         if characteristic.uuid == calendarCharacteristicUUID, let data = characteristic.value {
-            addDebugMessage("Received data on calendar characteristic: \(data.count) bytes")
+            self.addDebugMessage("Received data on calendar characteristic: \(data.count) bytes")
             
             if let calendarData = CalendarData.fromData(data) {
-                addDebugMessage("Received calendar data from \(calendarData.senderName) with \(calendarData.entries.count) entries")
+                self.addDebugMessage("Received calendar data from \(calendarData.senderName) with \(calendarData.entries.count) entries")
                 
-                // Store the received calendar data
-                DispatchQueue.main.async {
+                // Store the received calendar data using our thread-safe helper
+                self.updateOnMainThread {
                     self.receivedCalendarData = calendarData
                     
                     // Also update the device's calendar data if we can find it
@@ -1412,22 +1533,24 @@ extension BluetoothManager: CBPeripheralDelegate {
                     self.showCalendarDataInAppAlert(calendarData: calendarData)
                 }
             } else {
-                addDebugMessage("Failed to parse received calendar data")
+                self.addDebugMessage("Failed to parse received calendar data")
             }
         }
         
-        // Standard update for UI
-        objectWillChange.send()
+        // Standard update for UI - ensure it's on the main thread
+        self.updateOnMainThread {
+            self.objectWillChange.send()
+        }
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         if characteristic.uuid == calendarCharacteristicUUID {
             if let error = error {
-                addDebugMessage("Error writing to calendar characteristic: \(error.localizedDescription)")
+                self.addDebugMessage("Error writing to calendar characteristic: \(error.localizedDescription)")
                 
                 // If it's a "prepare queue is full" error, retry with an even smaller chunk
                 if error.localizedDescription.contains("prepare queue is full") {
-                    addDebugMessage("Detected queue full error, will retry with smaller data")
+                    self.addDebugMessage("Detected queue full error, will retry with smaller data")
                     retryWriteIfNeeded()
                 } else {
                     // Other error, just finish
@@ -1442,11 +1565,11 @@ extension BluetoothManager: CBPeripheralDelegate {
                     
                     // We successfully sent a chunk, but there's more data - this approach is not working
                     // Let's just report success anyway since we at least sent some data
-                    addDebugMessage("Successfully wrote a small chunk of the calendar data")
+                    self.addDebugMessage("Successfully wrote a small chunk of the calendar data")
                     finishCalendarDataSending(success: true)
                 } else {
                     // Standard success case
-                    addDebugMessage("Successfully wrote calendar data to characteristic")
+                    self.addDebugMessage("Successfully wrote calendar data to characteristic")
                     finishCalendarDataSending(success: true)
                 }
             }
@@ -1455,9 +1578,9 @@ extension BluetoothManager: CBPeripheralDelegate {
     
     // Display an in-app alert for incoming calendar data
     private func showCalendarDataInAppAlert(calendarData: CalendarData) {
-        addDebugMessage("Showing in-app alert: Calendar data from \(calendarData.senderName)")
+        self.addDebugMessage("Showing in-app alert: Calendar data from \(calendarData.senderName)")
         
-        DispatchQueue.main.async {
+        self.updateOnMainThread {
             self.alertCalendarData = calendarData
             self.showCalendarDataAlert = true
         }
