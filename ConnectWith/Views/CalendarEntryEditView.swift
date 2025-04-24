@@ -8,6 +8,7 @@ struct CalendarEntryEditView: View {
     
     @State private var entryTitle: String = ""
     @State private var entryLocation: String = ""
+    @State private var selectedDay: Int = 1
     @State private var isEditSuccessful: Bool = false
     
     // Month names for displaying month label
@@ -15,6 +16,9 @@ struct CalendarEntryEditView: View {
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
     ]
+    
+    // Day options (1-31)
+    private let dayOptions = Array(1...31)
     
     var body: some View {
         ScrollView {
@@ -35,6 +39,22 @@ struct CalendarEntryEditView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Event Details")
                         .font(.headline)
+                    
+                    // Day picker
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Day")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Picker("Day", selection: $selectedDay) {
+                            ForEach(dayOptions, id: \.self) { day in
+                                Text("\(day)").tag(day)
+                            }
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .frame(height: 120)
+                        .padding(.bottom, 8)
+                    }
                     
                     // Title field
                     VStack(alignment: .leading, spacing: 8) {
@@ -78,7 +98,8 @@ struct CalendarEntryEditView: View {
                         bluetoothManager.updateCalendarEntry(
                             forMonth: entry.month,
                             title: entryTitle,
-                            location: entryLocation
+                            location: entryLocation,
+                            day: selectedDay
                         )
                         
                         // Show success message
@@ -122,6 +143,7 @@ struct CalendarEntryEditView: View {
         if let currentEntry = bluetoothManager.calendarEntries.first(where: { $0.month == entry.month }) {
             entryTitle = currentEntry.title
             entryLocation = currentEntry.location
+            selectedDay = currentEntry.day
         }
     }
 }

@@ -100,9 +100,21 @@ struct CalendarEntryCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(monthNames[entry.month - 1])
-                .font(.headline)
-                .foregroundColor(.white)
+            HStack {
+                Text("\(monthNames[entry.month - 1]) \(entry.day)")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Text("Day \(entry.day)")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(12)
+            }
             
             if entry.title.isEmpty && entry.location.isEmpty {
                 Text("No events scheduled")
