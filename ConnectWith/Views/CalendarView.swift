@@ -7,53 +7,53 @@ import CoreBluetooth
 fileprivate struct MonthColors {
     // Array of color pairs for each month (1-based indexing)
     static let colors: [(primary: Color, secondary: Color)] = [
-        // January - Light blue (Winter)
-        (primary: Color(red: 0.53, green: 0.81, blue: 0.92),
-         secondary: Color(red: 0.40, green: 0.69, blue: 0.82)),
+        // January - Deep blue (Winter)
+        (primary: Color(red: 0.20, green: 0.40, blue: 0.70),
+         secondary: Color(red: 0.10, green: 0.30, blue: 0.60)),
         
-        // February - Medium blue (Winter)
-        (primary: Color(red: 0.44, green: 0.73, blue: 0.84),
-         secondary: Color(red: 0.35, green: 0.60, blue: 0.79)),
+        // February - Royal purple (Winter)
+        (primary: Color(red: 0.45, green: 0.30, blue: 0.75),
+         secondary: Color(red: 0.35, green: 0.22, blue: 0.65)),
         
-        // March - Light green (Spring)
-        (primary: Color(red: 0.56, green: 0.78, blue: 0.55),
-         secondary: Color(red: 0.40, green: 0.65, blue: 0.45)),
+        // March - Teal (Early Spring)
+        (primary: Color(red: 0.20, green: 0.60, blue: 0.65),
+         secondary: Color(red: 0.15, green: 0.50, blue: 0.55)),
         
-        // April - Fresh green (Spring)
-        (primary: Color(red: 0.47, green: 0.75, blue: 0.48),
-         secondary: Color(red: 0.35, green: 0.62, blue: 0.40)),
+        // April - Lime green (Spring)
+        (primary: Color(red: 0.55, green: 0.75, blue: 0.25),
+         secondary: Color(red: 0.45, green: 0.65, blue: 0.15)),
         
-        // May - Vibrant green (Spring)
-        (primary: Color(red: 0.36, green: 0.70, blue: 0.42),
-         secondary: Color(red: 0.28, green: 0.56, blue: 0.35)),
+        // May - Salmon (Late Spring)
+        (primary: Color(red: 0.95, green: 0.55, blue: 0.55),
+         secondary: Color(red: 0.85, green: 0.45, blue: 0.45)),
         
-        // June - Light gold (Summer)
-        (primary: Color(red: 0.95, green: 0.77, blue: 0.42),
-         secondary: Color(red: 0.85, green: 0.65, blue: 0.30)),
+        // June - Golden (Early Summer)
+        (primary: Color(red: 0.95, green: 0.77, blue: 0.30),
+         secondary: Color(red: 0.85, green: 0.67, blue: 0.20)),
         
-        // July - Orange (Summer)
-        (primary: Color(red: 0.94, green: 0.65, blue: 0.30),
-         secondary: Color(red: 0.82, green: 0.55, blue: 0.25)),
+        // July - Deep orange (Summer)
+        (primary: Color(red: 0.95, green: 0.45, blue: 0.20),
+         secondary: Color(red: 0.85, green: 0.35, blue: 0.10)),
         
-        // August - Coral (Summer)
-        (primary: Color(red: 0.94, green: 0.52, blue: 0.30),
-         secondary: Color(red: 0.82, green: 0.42, blue: 0.25)),
+        // August - Ocean blue (Late Summer)
+        (primary: Color(red: 0.15, green: 0.55, blue: 0.85),
+         secondary: Color(red: 0.05, green: 0.45, blue: 0.75)),
         
-        // September - Light brown (Fall)
-        (primary: Color(red: 0.80, green: 0.52, blue: 0.25),
-         secondary: Color(red: 0.70, green: 0.42, blue: 0.20)),
+        // September - Burgundy (Early Fall)
+        (primary: Color(red: 0.65, green: 0.12, blue: 0.25),
+         secondary: Color(red: 0.55, green: 0.08, blue: 0.18)),
         
-        // October - Rust (Fall)
-        (primary: Color(red: 0.70, green: 0.44, blue: 0.40),
-         secondary: Color(red: 0.60, green: 0.35, blue: 0.30)),
+        // October - Rusty orange (Fall)
+        (primary: Color(red: 0.85, green: 0.35, blue: 0.10),
+         secondary: Color(red: 0.75, green: 0.25, blue: 0.05)),
         
-        // November - Plum (Fall)
-        (primary: Color(red: 0.55, green: 0.40, blue: 0.60),
-         secondary: Color(red: 0.47, green: 0.32, blue: 0.50)),
+        // November - Forest green (Late Fall)
+        (primary: Color(red: 0.15, green: 0.45, blue: 0.20),
+         secondary: Color(red: 0.10, green: 0.35, blue: 0.15)),
         
-        // December - Winter blue (Winter)
-        (primary: Color(red: 0.40, green: 0.58, blue: 0.74),
-         secondary: Color(red: 0.30, green: 0.48, blue: 0.62))
+        // December - Indigo (Winter)
+        (primary: Color(red: 0.25, green: 0.25, blue: 0.55),
+         secondary: Color(red: 0.15, green: 0.15, blue: 0.45))
     ]
     
     // Helper to get the primary color for a given month (1-12)
