@@ -86,12 +86,7 @@ struct SplashScreen: View {
                         .frame(width: 100, height: 100)
                         .foregroundColor(.white)
                     
-                    Image(systemName: "calendar")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 40, height: 40)
-                        .foregroundColor(.white.opacity(0.8))
-                        .offset(x: 25, y: 25)
+
                 }
                 .padding()
                 .onAppear {

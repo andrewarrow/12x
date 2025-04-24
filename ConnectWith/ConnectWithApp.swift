@@ -190,15 +190,15 @@ struct TwelvexApp: App {
     // Register app delegate
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     
-    // App delegate to show forced splash screen
+    // App delegate - not showing forced splash screen anymore
     class AppDelegate: NSObject, UIApplicationDelegate {
         func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
             print("🔶 LIFECYCLE: UIApplicationDelegate - didFinishLaunchingWithOptions")
             
-            // Show our forced splash screen immediately
-            DispatchQueue.main.async {
-                ForcedSplashCoordinator.shared.showSplash()
-            }
+            // Don't show the forced splash screen, using only SwiftUI splash
+            // DispatchQueue.main.async {
+            //    ForcedSplashCoordinator.shared.showSplash()
+            // }
             
             return true
         }
@@ -225,10 +225,13 @@ struct TwelvexApp: App {
             let _ = print("🔶 LIFECYCLE: TwelvexApp body Scene evaluated")
             
             ZStack {
+                // Using only the SwiftUI SplashScreen, removing the UIKit overlay splash
                 if isShowingSplash {
                     SplashScreen(isShowingSplash: $isShowingSplash)
                         .onAppear {
                             print("🔶 LIFECYCLE: SwiftUI SplashScreen appeared")
+                            // Ensure the UIKit splash is dismissed if it's showing
+                            ForcedSplashCoordinator.shared.dismissSplash()
                         }
                 } else {
                     MainTabView()
