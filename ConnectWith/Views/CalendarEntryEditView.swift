@@ -17,8 +17,47 @@ struct CalendarEntryEditView: View {
         "July", "August", "September", "October", "November", "December"
     ]
     
-    // Day options (1-31)
-    private let dayOptions = Array(1...31)
+    // Day of week names
+    private let weekdayNames = [
+        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+    ]
+    
+    // Get the days available for the selected month in the current year
+    private var availableDays: [Int] {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        return getDaysInMonth(month: entry.month, year: currentYear)
+    }
+    
+    // Get day of week for a specific day in the month
+    private func dayOfWeek(forDay day: Int) -> String {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        var dateComponents = DateComponents()
+        dateComponents.year = currentYear
+        dateComponents.month = entry.month
+        dateComponents.day = day
+        
+        if let date = Calendar.current.date(from: dateComponents) {
+            let weekday = Calendar.current.component(.weekday, from: date)
+            // weekday is 1-based with 1 being Sunday
+            return weekdayNames[weekday - 1]
+        }
+        return ""
+    }
+    
+    // Calculate number of days in a month for a specific year
+    private func getDaysInMonth(month: Int, year: Int) -> [Int] {
+        var dateComponents = DateComponents()
+        dateComponents.year = year
+        dateComponents.month = month
+        
+        // Get the range of days in the month
+        guard let date = Calendar.current.date(from: dateComponents),
+              let range = Calendar.current.range(of: .day, in: .month, for: date) else {
+            return Array(1...31) // Fallback to 31 days if calculation fails
+        }
+        
+        return Array(range)
+    }
     
     var body: some View {
         ScrollView {
@@ -47,8 +86,8 @@ struct CalendarEntryEditView: View {
                             .foregroundColor(.secondary)
                         
                         Picker("Day", selection: $selectedDay) {
-                            ForEach(dayOptions, id: \.self) { day in
-                                Text("\(day)").tag(day)
+                            ForEach(availableDays, id: \.self) { day in
+                                Text("\(day) (\(dayOfWeek(forDay: day)))").tag(day)
                             }
                         }
                         .pickerStyle(WheelPickerStyle())
@@ -143,7 +182,17 @@ struct CalendarEntryEditView: View {
         if let currentEntry = bluetoothManager.calendarEntries.first(where: { $0.month == entry.month }) {
             entryTitle = currentEntry.title
             entryLocation = currentEntry.location
-            selectedDay = currentEntry.day
+            
+            // Make sure the selected day is valid for this month
+            let currentYear = Calendar.current.component(.year, from: Date())
+            let daysInMonth = getDaysInMonth(month: entry.month, year: currentYear)
+            
+            // If the current day is valid for this month, use it; otherwise use day 1
+            if daysInMonth.contains(currentEntry.day) {
+                selectedDay = currentEntry.day
+            } else {
+                selectedDay = 1
+            }
         }
     }
 }

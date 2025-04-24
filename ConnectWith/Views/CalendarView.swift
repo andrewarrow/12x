@@ -98,6 +98,27 @@ struct CalendarEntryCard: View {
         "July", "August", "September", "October", "November", "December"
     ]
     
+    // Day of week names
+    private let weekdayNames = [
+        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+    ]
+    
+    // Get day of week for the entry
+    private var dayOfWeek: String {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        var dateComponents = DateComponents()
+        dateComponents.year = currentYear
+        dateComponents.month = entry.month
+        dateComponents.day = entry.day
+        
+        if let date = Calendar.current.date(from: dateComponents) {
+            let weekday = Calendar.current.component(.weekday, from: date)
+            // weekday is 1-based with 1 being Sunday
+            return weekdayNames[weekday - 1]
+        }
+        return ""
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -107,7 +128,7 @@ struct CalendarEntryCard: View {
                 
                 Spacer()
                 
-                Text("Day \(entry.day)")
+                Text("\(dayOfWeek)")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.8))
                     .padding(.horizontal, 8)
