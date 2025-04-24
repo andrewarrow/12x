@@ -4,6 +4,7 @@ import SwiftUI
 struct CalendarDataAlertView: View {
     @Binding var isShowing: Bool
     let calendarData: CalendarData
+    let changeDescriptions: [String]
     var onDismiss: () -> Void
     @Environment(\.colorScheme) var colorScheme
     
@@ -47,17 +48,47 @@ struct CalendarDataAlertView: View {
                 Divider()
                 
                 // Calendar data content
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("From: \(calendarData.senderName)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
-                    Text("Received calendar with \(calendarData.entries.count) entries")
-                        .font(.body)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                        .cornerRadius(12)
+                    if !changeDescriptions.isEmpty {
+                        Text("Changes:")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .padding(.top, 4)
+                        
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(changeDescriptions, id: \.self) { change in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: "arrow.right")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.blue)
+                                            .frame(width: 12, height: 12)
+                                            .padding(.top, 4)
+                                        
+                                        Text(change)
+                                            .font(.body)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+                            .cornerRadius(12)
+                        }
+                        .frame(maxHeight: 200) // Limit the height of the scroll view
+                    } else {
+                        Text("Received calendar with \(calendarData.entries.count) entries")
+                            .font(.body)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+                            .cornerRadius(12)
+                    }
                 }
                 
                 Spacer()
@@ -100,8 +131,8 @@ struct CalendarDataAlertView: View {
             .background(colorScheme == .dark ? Color(UIColor.systemBackground) : Color.white)
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.2), radius: 16)
-            .padding(.horizontal, 40)
-            .frame(maxWidth: 400)
+            .padding(.horizontal, 30)
+            .frame(maxWidth: 450)
             .transition(.scale(scale: 0.85).combined(with: .opacity))
         }
     }
@@ -109,6 +140,8 @@ struct CalendarDataAlertView: View {
 
 struct BluetoothDeviceListView: View {
     @EnvironmentObject var bluetoothManager: BluetoothManager
+    // Add explicit state tracking to ensure alert visibility
+    @State private var showDebugAlert = false
     
     var body: some View {
         NavigationView {
@@ -188,6 +221,7 @@ struct BluetoothDeviceListView: View {
                     CalendarDataAlertView(
                         isShowing: $bluetoothManager.showCalendarDataAlert,
                         calendarData: alertCalendarData,
+                        changeDescriptions: bluetoothManager.calendarChangeDescriptions,
                         onDismiss: {
                             // Find the device that sent the calendar data
                             if let senderDeviceIndex = bluetoothManager.discoveredDevices.firstIndex(where: { device in
@@ -197,6 +231,58 @@ struct BluetoothDeviceListView: View {
                             }
                         }
                     )
+                    .onAppear {
+                        print("📢 ALERT APPEARED: showing calendar data from \(alertCalendarData.senderName)")
+                        print("📢 Change descriptions: \(bluetoothManager.calendarChangeDescriptions.count)")
+                    }
+                }
+                
+                // Debug Button (ULTRATHINK)
+                if !bluetoothManager.showCalendarDataAlert {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                // Create test data
+                                let testEntries = [
+                                    CalendarEntry(title: "Meeting", location: "Conference Room", month: 1, day: 15),
+                                    CalendarEntry(title: "Lunch", location: "Cafeteria", month: 2, day: 20),
+                                    CalendarEntry(title: "Conference", location: "Convention Center", month: 3, day: 5)
+                                ]
+                                
+                                let testChangeDescriptions = [
+                                    "January's event was moved from Monday the 17th to Sunday the 15th by Frank.",
+                                    "February's event title was changed from 'Team lunch' to 'Lunch' by Greg.",
+                                    "March's event location was changed from 'The Zoo' to 'Convention Center' by Alice."
+                                ]
+                                
+                                // Create test CalendarData
+                                let testCalendarData = CalendarData(
+                                    senderName: "Test User",
+                                    entries: testEntries
+                                )
+                                
+                                // Set up for test display
+                                bluetoothManager.updateOnMainThread {
+                                    bluetoothManager.calendarChangeDescriptions = testChangeDescriptions
+                                    bluetoothManager.alertCalendarData = testCalendarData
+                                    bluetoothManager.showCalendarDataAlert = true
+                                    bluetoothManager.objectWillChange.send()
+                                }
+                                
+                                // Debug output
+                                print("ULTRATHINK TEST: Alert should now be visible")
+                            }) {
+                                Text("ULTRATHINK TEST")
+                                    .padding(10)
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                            }
+                            .padding()
+                        }
+                    }
                 }
             }
             .navigationTitle("Nearby Devices")

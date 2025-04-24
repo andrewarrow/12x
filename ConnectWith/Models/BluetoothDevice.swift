@@ -36,14 +36,28 @@ struct CalendarData: Identifiable, Codable {
     func toData() -> Data? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        return try? encoder.encode(self)
+        do {
+            let data = try encoder.encode(self)
+            print("Successfully encoded CalendarData to \(data.count) bytes")
+            return data
+        } catch {
+            print("Error encoding CalendarData: \(error)")
+            return nil
+        }
     }
     
     // Convert from Data received over Bluetooth
     static func fromData(_ data: Data) -> CalendarData? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(CalendarData.self, from: data)
+        do {
+            let calendarData = try decoder.decode(CalendarData.self, from: data)
+            print("Successfully decoded CalendarData with \(calendarData.entries.count) entries")
+            return calendarData
+        } catch {
+            print("Error decoding CalendarData: \(error)")
+            return nil
+        }
     }
 }
 

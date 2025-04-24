@@ -59,6 +59,7 @@ class BluetoothManager: NSObject, ObservableObject {
     // Alert system for incoming calendar data
     @Published var showCalendarDataAlert = false
     @Published var alertCalendarData: CalendarData?
+    @Published var calendarChangeDescriptions: [String] = []
     
     // Private properties - used internally but don't trigger UI updates
     private var tempDiscoveredDevices: [BluetoothDevice] = []
@@ -232,7 +233,8 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Helper to ensure updates happen on main thread
-    private func updateOnMainThread(_ block: @escaping () -> Void) {
+    // Made public so it can be used from views for testing
+    func updateOnMainThread(_ block: @escaping () -> Void) {
         if Thread.isMainThread {
             block()
         } else {
@@ -1302,11 +1304,25 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                         self.updateOnMainThread {
                             self.receivedCalendarData = calendarData
                             
-                            // Update our local calendar with the received data
+                            // EXTRA DEBUG: Dump the first few entries for verification
+                            for (index, entry) in calendarData.entries.prefix(3).enumerated() {
+                                self.addDebugMessage("DEBUG Entry \(index): Month \(entry.month), Day \(entry.day), Title: \(entry.title), Location: \(entry.location)")
+                            }
+                            
+                            // Update our local calendar with the received data 
+                            // (This will also update calendarChangeDescriptions)
                             self.updateCalendarWithReceivedData(calendarData)
                             
-                            // Show in-app alert
-                            self.showCalendarDataInAppAlert(calendarData: calendarData)
+                            // Important: Wait a tiny bit to ensure changes are processed first
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                                guard let self = self else { return }
+                                
+                                // Show in-app alert with an explicit dispatch to main thread
+                                self.addDebugMessage("⚠️ Ready to show alert after processing changes")
+                                self.showCalendarDataAlert = true
+                                self.objectWillChange.send()
+                                self.showCalendarDataInAppAlert(calendarData: calendarData)
+                            }
                         }
                     } else {
                         self.addDebugMessage("JSON missing required fields - waiting for more chunks")
@@ -1341,8 +1357,19 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         return false
     }
     
-    // Update our local calendar with the received data
+    // Update our local calendar with the received data and generate change descriptions
     private func updateCalendarWithReceivedData(_ calendarData: CalendarData) {
+        // Get the current entries before updating
+        let currentEntries = self.calendarEntries
+        
+        // Generate change descriptions before replacing
+        let changes = generateCalendarChanges(oldEntries: currentEntries, newEntries: calendarData.entries, senderName: calendarData.senderName)
+        
+        // Store the changes for display in the alert
+        self.updateOnMainThread {
+            self.calendarChangeDescriptions = changes
+        }
+        
         // Replace our calendar entries with the received ones
         self.updateOnMainThread {
             self.calendarEntries = calendarData.entries
@@ -1352,6 +1379,97 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         }
         
         self.addDebugMessage("Updated local calendar with \(calendarData.entries.count) entries from \(calendarData.senderName)")
+        
+        // Log the changes
+        for change in changes {
+            self.addDebugMessage("Calendar change: \(change)")
+        }
+    }
+    
+    // Generate descriptions of what changed between the old and new calendar entries
+    private func generateCalendarChanges(oldEntries: [CalendarEntry], newEntries: [CalendarEntry], senderName: String) -> [String] {
+        var changes = [String]()
+        
+        // Month names for better descriptions
+        let monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        
+        // Day of week names for better descriptions
+        let weekdayNames = [
+            "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+        ]
+        
+        // Function to get day of week for a date
+        func dayOfWeek(month: Int, day: Int) -> String {
+            let currentYear = Calendar.current.component(.year, from: Date())
+            var dateComponents = DateComponents()
+            dateComponents.year = currentYear
+            dateComponents.month = month
+            dateComponents.day = day
+            
+            if let date = Calendar.current.date(from: dateComponents) {
+                let weekday = Calendar.current.component(.weekday, from: date)
+                // weekday is 1-based with 1 being Sunday
+                return weekdayNames[weekday - 1]
+            }
+            return ""
+        }
+        
+        // Compare each entry by month
+        for newEntry in newEntries {
+            if let oldEntry = oldEntries.first(where: { $0.month == newEntry.month }) {
+                // Compare day
+                if oldEntry.day != newEntry.day {
+                    let oldDayOfWeek = dayOfWeek(month: oldEntry.month, day: oldEntry.day)
+                    let newDayOfWeek = dayOfWeek(month: newEntry.month, day: newEntry.day)
+                    
+                    changes.append("\(monthNames[newEntry.month - 1])'s event was moved from \(oldDayOfWeek) the \(oldEntry.day)\(ordinalSuffix(oldEntry.day)) to \(newDayOfWeek) the \(newEntry.day)\(ordinalSuffix(newEntry.day)) by \(senderName).")
+                }
+                
+                // Compare title
+                if oldEntry.title != newEntry.title && !oldEntry.title.isEmpty && !newEntry.title.isEmpty {
+                    changes.append("\(monthNames[newEntry.month - 1])'s event title was changed from '\(oldEntry.title)' to '\(newEntry.title)' by \(senderName).")
+                } else if oldEntry.title.isEmpty && !newEntry.title.isEmpty {
+                    changes.append("\(monthNames[newEntry.month - 1])'s event title was set to '\(newEntry.title)' by \(senderName).")
+                }
+                
+                // Compare location
+                if oldEntry.location != newEntry.location && !oldEntry.location.isEmpty && !newEntry.location.isEmpty {
+                    changes.append("\(monthNames[newEntry.month - 1])'s event location was changed from '\(oldEntry.location)' to '\(newEntry.location)' by \(senderName).")
+                } else if oldEntry.location.isEmpty && !newEntry.location.isEmpty {
+                    changes.append("\(monthNames[newEntry.month - 1])'s event location was set to '\(newEntry.location)' by \(senderName).")
+                }
+            } else {
+                // New entry for a month that didn't exist before
+                changes.append("New event added for \(monthNames[newEntry.month - 1]) by \(senderName).")
+            }
+        }
+        
+        // If no specific changes were detected, provide a general update message
+        if changes.isEmpty {
+            changes.append("Calendar updated by \(senderName) with \(newEntries.count) entries.")
+        }
+        
+        return changes
+    }
+    
+    // Helper function to get the ordinal suffix for a day number
+    private func ordinalSuffix(_ number: Int) -> String {
+        let j = number % 10
+        let k = number % 100
+        
+        if j == 1 && k != 11 {
+            return "st"
+        }
+        if j == 2 && k != 12 {
+            return "nd"
+        }
+        if j == 3 && k != 13 {
+            return "rd"
+        }
+        return "th"
     }
     
     // Called when a central device subscribes to notifications
@@ -1578,11 +1696,26 @@ extension BluetoothManager: CBPeripheralDelegate {
     
     // Display an in-app alert for incoming calendar data
     private func showCalendarDataInAppAlert(calendarData: CalendarData) {
-        self.addDebugMessage("Showing in-app alert: Calendar data from \(calendarData.senderName)")
+        self.addDebugMessage("⚠️ ATTEMPTING TO SHOW in-app alert: Calendar data from \(calendarData.senderName)")
+        self.addDebugMessage("⚠️ Change descriptions: \(self.calendarChangeDescriptions.joined(separator: ", "))")
         
+        // Ensure we're on the main thread and add extra logging
         self.updateOnMainThread {
             self.alertCalendarData = calendarData
             self.showCalendarDataAlert = true
+            
+            // Force UI refresh by sending a willChange notification
+            self.objectWillChange.send()
+            
+            self.addDebugMessage("⚠️ ALERT VARIABLES SET - showCalendarDataAlert: \(self.showCalendarDataAlert), alertCalendarData: \(self.alertCalendarData != nil)")
+            
+            // Re-enforce the alert display after a short delay as a failsafe
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
+                self.addDebugMessage("⚠️ RE-ENFORCING ALERT DISPLAY after delay")
+                self.showCalendarDataAlert = true
+                self.objectWillChange.send()
+            }
         }
     }
 }
