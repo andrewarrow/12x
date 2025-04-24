@@ -1709,12 +1709,25 @@ extension BluetoothManager: CBPeripheralDelegate {
             
             self.addDebugMessage("⚠️ ALERT VARIABLES SET - showCalendarDataAlert: \(self.showCalendarDataAlert), alertCalendarData: \(self.alertCalendarData != nil)")
             
-            // Re-enforce the alert display after a short delay as a failsafe
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            // Make multiple attempts to ensure the alert is seen
+            self.scheduleAlertRetries()
+        }
+    }
+    
+    // Try multiple times to show the alert, in case it's missed
+    private func scheduleAlertRetries() {
+        // Try 5 times with increasing delays to ensure alert gets shown
+        for i in 0..<5 {
+            let delay = Double(i) * 0.5 + 0.5 // 0.5s, 1.0s, 1.5s, 2.0s, 2.5s
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self = self else { return }
-                self.addDebugMessage("⚠️ RE-ENFORCING ALERT DISPLAY after delay")
-                self.showCalendarDataAlert = true
-                self.objectWillChange.send()
+                
+                // Only retry if still needed and not dismissed
+                if self.showCalendarDataAlert {
+                    self.addDebugMessage("⚠️ RETRY #\(i+1): Re-enforcing alert display")
+                    self.objectWillChange.send()
+                }
             }
         }
     }

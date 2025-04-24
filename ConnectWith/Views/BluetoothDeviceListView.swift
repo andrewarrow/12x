@@ -142,6 +142,10 @@ struct BluetoothDeviceListView: View {
     @EnvironmentObject var bluetoothManager: BluetoothManager
     // Add explicit state tracking to ensure alert visibility
     @State private var showDebugAlert = false
+    // Add a local state mirror of the BluetoothManager alert state
+    @State private var localShowAlert = false
+    @State private var localAlertData: CalendarData?
+    @State private var localChangeDescriptions: [String] = []
     
     var body: some View {
         NavigationView {
@@ -216,29 +220,26 @@ struct BluetoothDeviceListView: View {
                     BluetoothFooter()
                 }
                 
-                // In-app Calendar Data Alert
-                if bluetoothManager.showCalendarDataAlert, let alertCalendarData = bluetoothManager.alertCalendarData {
+                // In-app Calendar Data Alert - Use local state to ensure it's displayed
+                if localShowAlert, let alertData = localAlertData {
                     CalendarDataAlertView(
-                        isShowing: $bluetoothManager.showCalendarDataAlert,
-                        calendarData: alertCalendarData,
-                        changeDescriptions: bluetoothManager.calendarChangeDescriptions,
+                        isShowing: $localShowAlert,
+                        calendarData: alertData,
+                        changeDescriptions: localChangeDescriptions,
                         onDismiss: {
-                            // Find the device that sent the calendar data
-                            if let senderDeviceIndex = bluetoothManager.discoveredDevices.firstIndex(where: { device in
-                                device.receivedCalendarData?.id == alertCalendarData.id
-                            }) {
-                                // We don't need to do anything here - user can navigate to the device if they want
-                            }
+                            // Reset both local and manager state
+                            localShowAlert = false
+                            bluetoothManager.showCalendarDataAlert = false
                         }
                     )
                     .onAppear {
-                        print("📢 ALERT APPEARED: showing calendar data from \(alertCalendarData.senderName)")
-                        print("📢 Change descriptions: \(bluetoothManager.calendarChangeDescriptions.count)")
+                        print("📢 ALERT APPEARED: showing calendar data from \(alertData.senderName)")
+                        print("📢 Change descriptions: \(localChangeDescriptions.count)")
                     }
                 }
                 
                 // Debug Button (ULTRATHINK)
-                if !bluetoothManager.showCalendarDataAlert {
+                if !localShowAlert {
                     VStack {
                         Spacer()
                         HStack {
@@ -263,13 +264,10 @@ struct BluetoothDeviceListView: View {
                                     entries: testEntries
                                 )
                                 
-                                // Set up for test display
-                                bluetoothManager.updateOnMainThread {
-                                    bluetoothManager.calendarChangeDescriptions = testChangeDescriptions
-                                    bluetoothManager.alertCalendarData = testCalendarData
-                                    bluetoothManager.showCalendarDataAlert = true
-                                    bluetoothManager.objectWillChange.send()
-                                }
+                                // Set up for test display - use LOCAL state for immediate visibility
+                                localChangeDescriptions = testChangeDescriptions
+                                localAlertData = testCalendarData
+                                localShowAlert = true
                                 
                                 // Debug output
                                 print("ULTRATHINK TEST: Alert should now be visible")
@@ -289,6 +287,27 @@ struct BluetoothDeviceListView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .accentColor(Color.blue)
+        // Monitor the bluetoothManager for alert changes
+        // This ensures we catch all alerts and display them
+        .onReceive(bluetoothManager.$showCalendarDataAlert) { showAlert in
+            if showAlert, let alertData = bluetoothManager.alertCalendarData {
+                // Sync the local state with the bluetoothManager state
+                self.localAlertData = alertData
+                self.localChangeDescriptions = bluetoothManager.calendarChangeDescriptions
+                self.localShowAlert = true
+                print("⚡️ ALERT STATE RECEIVED FROM MANAGER: \(alertData.senderName)")
+            }
+        }
+        // Check periodically for pending alerts
+        .onAppear {
+            // Check once on appear
+            checkPendingAlert()
+            
+            // Set up a timer to check frequently
+            Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                checkPendingAlert()
+            }
+        }
     }
     
     // Helper method to handle pull-to-refresh
@@ -301,6 +320,19 @@ struct BluetoothDeviceListView: View {
             try await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
         } catch {
             print("Sleep interrupted")
+        }
+    }
+    
+    // Check for a pending alert that might not have been shown
+    func checkPendingAlert() {
+        if bluetoothManager.showCalendarDataAlert, 
+           let alertData = bluetoothManager.alertCalendarData,
+           !localShowAlert {
+            
+            print("🚨 FOUND PENDING ALERT that wasn't displayed - showing it now")
+            localAlertData = alertData
+            localChangeDescriptions = bluetoothManager.calendarChangeDescriptions
+            localShowAlert = true
         }
     }
 }
