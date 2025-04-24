@@ -6,6 +6,7 @@ struct DeviceDetailView: View {
     let device: BluetoothDevice
     
     var body: some View {
+        // Use more animation control to prevent unwanted animations
         VStack {
             Spacer()
             
@@ -27,48 +28,64 @@ struct DeviceDetailView: View {
                     .foregroundColor(.secondary)
             }
             .padding()
+            .id("device-info") // Fixed ID to prevent animations
             
             Spacer()
             
-            // Success message
-            if bluetoothManager.transferSuccess == true {
-                VStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(.green)
-                    
-                    Text("Calendar Sent Successfully!")
-                        .font(.headline)
-                        .foregroundColor(.green)
-                }
-                .padding()
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(10)
-                .padding()
-            }
-            
-            // Error message
-            if bluetoothManager.transferSuccess == false {
-                VStack(spacing: 10) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(.red)
-                    
-                    Text("Failed to Send Calendar")
-                        .font(.headline)
-                        .foregroundColor(.red)
-                    
-                    if let errorMessage = bluetoothManager.transferError {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+            // Use a stable approach to show success/failure messages
+            // By using Group with a single conditional content approach
+            // we avoid multiple views being created and destroyed
+            Group {
+                if let transferSuccess = bluetoothManager.transferSuccess {
+                    if transferSuccess {
+                        // Success message
+                        VStack(spacing: 10) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.green)
+                            
+                            Text("Calendar Sent Successfully!")
+                                .font(.headline)
+                                .foregroundColor(.green)
+                        }
+                        .padding()
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(10)
+                        .padding()
+                        .transition(.opacity)
+                        .id("success-message") // Stable ID
+                    } else {
+                        // Error message
+                        VStack(spacing: 10) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.red)
+                            
+                            Text("Failed to Send Calendar")
+                                .font(.headline)
+                                .foregroundColor(.red)
+                            
+                            if let errorMessage = bluetoothManager.transferError {
+                                Text(errorMessage)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(10)
+                        .padding()
+                        .transition(.opacity)
+                        .id("error-message") // Stable ID
                     }
+                } else {
+                    // Empty spacer with the same height to prevent layout shifts
+                    Color.clear
+                        .frame(height: 140)
+                        .id("no-message") // Stable ID
                 }
-                .padding()
-                .background(Color.red.opacity(0.1))
-                .cornerRadius(10)
-                .padding()
             }
+            .animation(.easeInOut(duration: 0.5), value: bluetoothManager.transferSuccess != nil)
             
             // Send data button
             Button(action: {
@@ -126,6 +143,10 @@ struct DeviceDetailView: View {
                     }
                 }
                 .padding()
+                // Use a key value to ensure SwiftUI treats the whole progress section as one view
+                // that doesn't get recreated or animated independently
+                .id("progress-section")
+                .transition(.opacity) // Use a simple opacity transition when shown/hidden
                 .transaction { transaction in
                     // Disable all animations by default
                     transaction.animation = nil

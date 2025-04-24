@@ -53,6 +53,9 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var calendarEntries: [CalendarEntry] = []
     @Published var receivedCalendarData: CalendarData?
     
+    // Flag to indicate we're in cleanup mode - prevents timer callbacks from triggering
+    private var isCleaningUp: Bool = false
+    
     // Alert system for incoming calendar data
     @Published var showCalendarDataAlert = false
     @Published var alertCalendarData: CalendarData?
@@ -486,7 +489,7 @@ class BluetoothManager: NSObject, ObservableObject {
             let delay = 3.0 + (Double(chunkIndex) * 1.0) // 3 seconds initial delay, 1 second between chunks
             
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self = self, self.sendingCalendarData else { return }
+                guard let self = self, self.sendingCalendarData, !self.isCleaningUp else { return }
                 
                 // Calculate the current chunk's data
                 let startIndex = chunkIndex * chunkSize
@@ -509,7 +512,7 @@ class BluetoothManager: NSObject, ObservableObject {
                 if chunkIndex == totalChunks - 1 {
                     // Increase from 3.0 to 5.0 seconds
                     DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-                        guard let self = self, self.sendingCalendarData else { return }
+                        guard let self = self, self.sendingCalendarData, !self.isCleaningUp else { return }
                         self.addDebugMessage("All chunks sent, completing operation")
                         
                         // Transition to finalizing state
@@ -525,7 +528,7 @@ class BluetoothManager: NSObject, ObservableObject {
         // Increase from 5.0 to 15.0 seconds margin
         let totalTimeout = 3.0 + (Double(totalChunks) * 1.0) + 15.0 // Base delay + all chunks + 15 second margin
         DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout) { [weak self] in
-            guard let self = self, self.sendingCalendarData else { return }
+            guard let self = self, self.sendingCalendarData, !self.isCleaningUp else { return }
             
             self.addDebugMessage("Master timeout reached, ensuring operation completes")
             self.finishCalendarDataSending(success: true)
@@ -554,7 +557,7 @@ class BluetoothManager: NSObject, ObservableObject {
         // Use increasingly longer delays for retries
         let delay = Double(writeRetryCount) * 2.0
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, !self.isCleaningUp else { return }
             
             // Try with a very small chunk of the data
             let smallChunk = data.prefix(min(50, data.count))
@@ -627,13 +630,16 @@ class BluetoothManager: NSObject, ObservableObject {
         if success {
             addDebugMessage("Calendar data sent successfully!")
             // Progress updates will be handled by state transitions
+            // BUT DO NOT SET SUCCESS FLAG HERE - it will be set later in a single atomic update
         } else {
             addDebugMessage("Failed to send calendar data: \(errorMessage ?? "Unknown error")")
             DispatchQueue.main.async {
+                // Set all error state in one atomic update
                 self.error = errorMessage
                 self.transferError = errorMessage
                 self.transferState = .failed
                 self.transferSuccess = false
+                self.isCleaningUp = true // Prevent any other updates
             }
         }
         
@@ -647,7 +653,7 @@ class BluetoothManager: NSObject, ObservableObject {
         // Add a LONGER delay before disconnecting to allow the data to be processed
         // Increase from 3.0 seconds to 8.0 seconds to ensure complete transmission
         DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, !self.isCleaningUp else { return }
             
             // Display debug message showing we're still waiting
             self.addDebugMessage("Waiting for data processing to complete before disconnecting...")
@@ -657,7 +663,7 @@ class BluetoothManager: NSObject, ObservableObject {
             
             // Add another delay to ensure all notifications are processed
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                guard let self = self else { return }
+                guard let self = self, !self.isCleaningUp else { return }
                 
                 // Disconnect after sending
                 if let peripheral = self.peripheral, peripheral.state == .connected {
@@ -676,20 +682,41 @@ class BluetoothManager: NSObject, ObservableObject {
                         self.transferSuccess = true
                     }
                     
-                    // Keep the status visible for a moment before hiding everything
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        // Reset all UI state in one go to avoid flickering
+                    // Immediately transition to the "complete" state and mark transfer as successful
+                    // Setting these values together in a single synchronous block ensures they're seen as one update
+                    DispatchQueue.main.async {
+                        // First set the state and progress
+                        self.updateTransferState(.complete, progress: 1.0)
+                        
+                        // The isCleaningUp flag will prevent any other timers from changing the state
+                        self.isCleaningUp = true
+                        
+                        if success {
+                            // Set success flag in the same atomic update
+                            self.transferSuccess = true
+                        }
+                    }
+                    
+                    // After a short delay, hide the progress indicators but keep the success message
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        // Only hide the progress indicators, keep success message visible
                         self.sendingCalendarData = false
                     }
                     
-                    // After 5 seconds, reset the transfer success status so it doesn't show forever
+                    // Set a single timer for removing the success message - after a fixed delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
                         guard let self = self else { return }
                         
-                        // Reset all state in one atomic operation
-                        self.transferSuccess = nil
-                        self.transferError = nil
-                        self.transferState = .notStarted
+                        // Final reset - all at once to avoid multiple updates
+                        DispatchQueue.main.async {
+                            // Reset everything in one atomic update
+                            self.transferSuccess = nil
+                            self.transferError = nil
+                            self.transferState = .notStarted
+                            self.transferProgress = 0.0
+                            self.isCleaningUp = false
+                            // Any in-flight timers will be rejected by the isCleaningUp check
+                        }
                     }
                 }
             }
