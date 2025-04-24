@@ -61,6 +61,24 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var alertCalendarData: CalendarData?
     @Published var calendarChangeDescriptions: [String] = []
     
+    // History entry model to track changes over time
+    struct HistoryEntry: Identifiable, Codable {
+        var id: UUID
+        var date: Date
+        var senderName: String
+        var changes: [String]
+        
+        init(senderName: String, changes: [String], date: Date = Date()) {
+            self.id = UUID()
+            self.date = date
+            self.senderName = senderName
+            self.changes = changes
+        }
+    }
+    
+    // History entries for tracking calendar changes
+    @Published var historyEntries: [HistoryEntry] = []
+    
     // Private properties - used internally but don't trigger UI updates
     private var tempDiscoveredDevices: [BluetoothDevice] = []
     private var lastScanDate: Date = Date()
@@ -129,6 +147,9 @@ class BluetoothManager: NSObject, ObservableObject {
         // Load saved calendar entries from UserDefaults
         self.loadCalendarEntries()
         
+        // Load saved history entries from UserDefaults
+        self.loadHistoryEntries()
+        
         self.addDebugMessage("Initialized BluetoothManager with device name: \(self.deviceCustomName)")
         
         // Scanning will automatically start once Bluetooth is powered on
@@ -164,6 +185,52 @@ class BluetoothManager: NSObject, ObservableObject {
             UserDefaults.standard.set(encodedData, forKey: "CalendarEntries")
             self.addDebugMessage("Saved \(self.calendarEntries.count) calendar entries to UserDefaults")
         }
+    }
+    
+    // Save history entries to UserDefaults
+    func saveHistoryEntries() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        
+        if let encodedData = try? encoder.encode(self.historyEntries) {
+            UserDefaults.standard.set(encodedData, forKey: "HistoryEntries")
+            self.addDebugMessage("Saved \(self.historyEntries.count) history entries to UserDefaults")
+        }
+    }
+    
+    // Load saved history entries from UserDefaults
+    private func loadHistoryEntries() {
+        if let savedData = UserDefaults.standard.data(forKey: "HistoryEntries") {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            
+            if let loadedEntries = try? decoder.decode([HistoryEntry].self, from: savedData) {
+                self.historyEntries = loadedEntries
+                self.addDebugMessage("Loaded \(loadedEntries.count) history entries from UserDefaults")
+            }
+        }
+    }
+    
+    // Add a new history entry 
+    private func addHistoryEntry(senderName: String, changes: [String]) {
+        // Create a new history entry
+        let entry = HistoryEntry(senderName: senderName, changes: changes)
+        
+        // Add the entry to the array
+        self.updateOnMainThread {
+            // Limit to 100 most recent entries to avoid excessive storage
+            if self.historyEntries.count >= 100 {
+                self.historyEntries.removeFirst(self.historyEntries.count - 99)
+            }
+            
+            // Add new entry
+            self.historyEntries.append(entry)
+            
+            // Save to persistent storage
+            self.saveHistoryEntries()
+        }
+        
+        self.addDebugMessage("Added history entry with \(changes.count) changes from \(senderName)")
     }
     
     // Update a calendar entry
@@ -1370,6 +1437,11 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
             self.calendarChangeDescriptions = changes
         }
         
+        // Add the changes to history
+        if !changes.isEmpty {
+            addHistoryEntry(senderName: calendarData.senderName, changes: changes)
+        }
+        
         // Replace our calendar entries with the received ones
         self.updateOnMainThread {
             self.calendarEntries = calendarData.entries
@@ -1417,6 +1489,9 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
             return ""
         }
         
+        // Use the sender name directly - the bluetooth devices already have the correct names
+        let nameForChanges = senderName
+        
         // Compare each entry by month
         for newEntry in newEntries {
             if let oldEntry = oldEntries.first(where: { $0.month == newEntry.month }) {
@@ -1425,31 +1500,31 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                     let oldDayOfWeek = dayOfWeek(month: oldEntry.month, day: oldEntry.day)
                     let newDayOfWeek = dayOfWeek(month: newEntry.month, day: newEntry.day)
                     
-                    changes.append("\(monthNames[newEntry.month - 1])'s event was moved from \(oldDayOfWeek) the \(oldEntry.day)\(ordinalSuffix(oldEntry.day)) to \(newDayOfWeek) the \(newEntry.day)\(ordinalSuffix(newEntry.day)) by \(senderName).")
+                    changes.append("\(monthNames[newEntry.month - 1])'s event was moved from \(oldDayOfWeek) the \(oldEntry.day)\(ordinalSuffix(oldEntry.day)) to \(newDayOfWeek) the \(newEntry.day)\(ordinalSuffix(newEntry.day)) by \(nameForChanges).")
                 }
                 
                 // Compare title
                 if oldEntry.title != newEntry.title && !oldEntry.title.isEmpty && !newEntry.title.isEmpty {
-                    changes.append("\(monthNames[newEntry.month - 1])'s event title was changed from '\(oldEntry.title)' to '\(newEntry.title)' by \(senderName).")
+                    changes.append("\(monthNames[newEntry.month - 1])'s event title was changed from '\(oldEntry.title)' to '\(newEntry.title)' by \(nameForChanges).")
                 } else if oldEntry.title.isEmpty && !newEntry.title.isEmpty {
-                    changes.append("\(monthNames[newEntry.month - 1])'s event title was set to '\(newEntry.title)' by \(senderName).")
+                    changes.append("\(monthNames[newEntry.month - 1])'s event title was set to '\(newEntry.title)' by \(nameForChanges).")
                 }
                 
                 // Compare location
                 if oldEntry.location != newEntry.location && !oldEntry.location.isEmpty && !newEntry.location.isEmpty {
-                    changes.append("\(monthNames[newEntry.month - 1])'s event location was changed from '\(oldEntry.location)' to '\(newEntry.location)' by \(senderName).")
+                    changes.append("\(monthNames[newEntry.month - 1])'s event location was changed from '\(oldEntry.location)' to '\(newEntry.location)' by \(nameForChanges).")
                 } else if oldEntry.location.isEmpty && !newEntry.location.isEmpty {
-                    changes.append("\(monthNames[newEntry.month - 1])'s event location was set to '\(newEntry.location)' by \(senderName).")
+                    changes.append("\(monthNames[newEntry.month - 1])'s event location was set to '\(newEntry.location)' by \(nameForChanges).")
                 }
             } else {
                 // New entry for a month that didn't exist before
-                changes.append("New event added for \(monthNames[newEntry.month - 1]) by \(senderName).")
+                changes.append("New event added for \(monthNames[newEntry.month - 1]) by \(nameForChanges).")
             }
         }
         
         // If no specific changes were detected, provide a general update message
         if changes.isEmpty {
-            changes.append("Calendar updated by \(senderName) with \(newEntries.count) entries.")
+            changes.append("Calendar updated by \(nameForChanges) with \(newEntries.count) entries.")
         }
         
         return changes

@@ -237,51 +237,6 @@ struct BluetoothDeviceListView: View {
                         print("📢 Change descriptions: \(localChangeDescriptions.count)")
                     }
                 }
-                
-                // Debug Button (ULTRATHINK)
-                if !localShowAlert {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Button(action: {
-                                // Create test data
-                                let testEntries = [
-                                    CalendarEntry(title: "Meeting", location: "Conference Room", month: 1, day: 15),
-                                    CalendarEntry(title: "Lunch", location: "Cafeteria", month: 2, day: 20),
-                                    CalendarEntry(title: "Conference", location: "Convention Center", month: 3, day: 5)
-                                ]
-                                
-                                let testChangeDescriptions = [
-                                    "January's event was moved from Monday the 17th to Sunday the 15th by Frank.",
-                                    "February's event title was changed from 'Team lunch' to 'Lunch' by Greg.",
-                                    "March's event location was changed from 'The Zoo' to 'Convention Center' by Alice."
-                                ]
-                                
-                                // Create test CalendarData
-                                let testCalendarData = CalendarData(
-                                    senderName: "Test User",
-                                    entries: testEntries
-                                )
-                                
-                                // Set up for test display - use LOCAL state for immediate visibility
-                                localChangeDescriptions = testChangeDescriptions
-                                localAlertData = testCalendarData
-                                localShowAlert = true
-                                
-                                // Debug output
-                                print("ULTRATHINK TEST: Alert should now be visible")
-                            }) {
-                                Text("ULTRATHINK TEST")
-                                    .padding(10)
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                            }
-                            .padding()
-                        }
-                    }
-                }
             }
             .navigationTitle("Nearby Devices")
             .navigationBarTitleDisplayMode(.inline)
@@ -543,6 +498,118 @@ struct BluetoothFooter: View {
         
         // Use the tracked last scan date
         return formatter.string(from: bluetoothManager.getLastScanDate())
+    }
+}
+
+// Calendar History View for displaying past changes
+struct HistoryView: View {
+    @EnvironmentObject var bluetoothManager: BluetoothManager
+    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        List {
+            ForEach(bluetoothManager.historyEntries.sorted(by: { $0.date > $1.date })) { entry in
+                Section(header: 
+                    HStack {
+                        Text(formattedDate(entry.date))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Text("From: \(formatSenderName(entry.senderName))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                ) {
+                    ForEach(entry.changes, id: \.self) { change in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12))
+                                .foregroundColor(.blue)
+                                .frame(width: 12, height: 12)
+                                .padding(.top, 4)
+                            
+                            Text(change)
+                                .font(.body)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            
+            if bluetoothManager.historyEntries.isEmpty {
+                Section {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 48))
+                                .foregroundColor(.gray)
+                            
+                            Text("No History Yet")
+                                .font(.headline)
+                            
+                            Text("Calendar changes will appear here")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.vertical, 40)
+                        Spacer()
+                    }
+                }
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+        .navigationTitle("Calendar History")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !bluetoothManager.historyEntries.isEmpty {
+                    Button(action: {
+                        // Show confirmation dialog
+                        showClearConfirmation = true
+                    }) {
+                        Text("Clear")
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+        }
+        .alert(isPresented: $showClearConfirmation) {
+            Alert(
+                title: Text("Clear History"),
+                message: Text("Are you sure you want to clear all history entries? This cannot be undone."),
+                primaryButton: .destructive(Text("Clear")) {
+                    clearAllHistory()
+                },
+                secondaryButton: .cancel()
+            )
+        }
+    }
+    
+    @State private var showClearConfirmation = false
+    
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    private func formatSenderName(_ name: String) -> String {
+        // Use the name directly - it already has the correct format
+        return name
+    }
+    
+    private func clearAllHistory() {
+        bluetoothManager.updateOnMainThread {
+            bluetoothManager.historyEntries.removeAll()
+            bluetoothManager.saveHistoryEntries()
+        }
     }
 }
 

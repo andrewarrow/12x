@@ -298,6 +298,36 @@ struct SettingsView: View {
                     }
                 }
                 
+                Section(header: Text("History")) {
+                    NavigationLink(destination: HistoryView().environmentObject(bluetoothManager)) {
+                        HStack {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundColor(.blue)
+                                .font(.title3)
+                            
+                            Text("Calendar Change History")
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    
+                    // Badge to show number of history entries
+                    .overlay(
+                        Group {
+                            if !bluetoothManager.historyEntries.isEmpty {
+                                Text("\(bluetoothManager.historyEntries.count)")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing)
+                    )
+                }
+                
                 Section(header: Text("Debug Information")) {
                     NavigationLink(destination: DebugLogView(debugMessages: bluetoothManager.debugMessages)) {
                         HStack {
