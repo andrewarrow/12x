@@ -2,6 +2,54 @@ import SwiftUI
 import Combine
 import Foundation
 import CoreBluetooth
+import UIKit
+
+// Custom UITextField with keyboard dismiss button
+struct KeyboardDismissTextField: UIViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField()
+        textField.delegate = context.coordinator
+        textField.placeholder = placeholder
+        textField.borderStyle = .roundedRect
+        textField.font = UIFont.systemFont(ofSize: 18)
+        
+        // Add "Done" button directly on the keyboard
+        let keyboardType = textField.keyboardType
+        textField.keyboardType = keyboardType
+        textField.returnKeyType = .done // This sets the return key to "Done"
+        
+        return textField
+    }
+    
+    func updateUIView(_ uiView: UITextField, context: Context) {
+        uiView.text = text
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: KeyboardDismissTextField
+        
+        init(_ parent: KeyboardDismissTextField) {
+            self.parent = parent
+        }
+        
+        func textFieldDidChangeSelection(_ textField: UITextField) {
+            parent.text = textField.text ?? ""
+        }
+        
+        // Handle "Done" button press on keyboard
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            return true
+        }
+    }
+}
 
 // Month colors definition - directly included to avoid import issues
 fileprivate struct MonthColors {
@@ -158,15 +206,9 @@ struct CalendarEntryEditView: View {
                 
                 // Entry form
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Event Details")
-                        .font(.headline)
                     
                     // Day picker
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Day")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
                         Picker("Day", selection: $selectedDay) {
                             ForEach(availableDays, id: \.self) { day in
                                 Text("\(day) (\(dayOfWeek(forDay: day)))").tag(day)
@@ -183,8 +225,9 @@ struct CalendarEntryEditView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         
-                        TextField("Event Title", text: $entryTitle)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        KeyboardDismissTextField(text: $entryTitle, placeholder: "Event Title")
+                            .padding(.vertical, 12) // Increased vertical padding for larger tap target
+                            .frame(height: 50) // Fixed height to ensure larger tap target
                             .padding(.bottom, 8)
                     }
                     
@@ -194,8 +237,9 @@ struct CalendarEntryEditView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         
-                        TextField("Location", text: $entryLocation)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        KeyboardDismissTextField(text: $entryLocation, placeholder: "Location")
+                            .padding(.vertical, 12) // Increased vertical padding for larger tap target
+                            .frame(height: 50) // Fixed height to ensure larger tap target
                             .padding(.bottom, 8)
                     }
                     
@@ -256,6 +300,18 @@ struct CalendarEntryEditView: View {
             // Load the entry data when the view appears
             loadEntryData()
         }
+        // Add a background view to capture taps for dismissing the keyboard
+        .background(
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Dismiss the keyboard when tapped outside of a text field
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), 
+                                                  to: nil, 
+                                                  from: nil, 
+                                                  for: nil)
+                }
+        )
     }
     
     // Load entry data
