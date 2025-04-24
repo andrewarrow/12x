@@ -4,50 +4,100 @@ import Foundation
 import CoreBluetooth
 import UIKit
 
-// Custom UITextField with keyboard dismiss button
-struct KeyboardDismissTextField: UIViewRepresentable {
+// UIKit-based TextField that ensures keyboard appears
+struct CustomKeyboardTextField: UIViewRepresentable {
     @Binding var text: String
-    var placeholder: String
+    var isFirstResponder: Bool = false
+    var placeholder: String = "Tap to edit"
+    var onCommit: (() -> Void)? = nil
+    
+    class Coordinator: NSObject, UITextFieldDelegate {
+        @Binding var text: String
+        var onCommit: (() -> Void)? = nil
+        
+        init(text: Binding<String>, onCommit: (() -> Void)? = nil) {
+            self._text = text
+            self.onCommit = onCommit
+        }
+        
+        func textFieldDidChangeSelection(_ textField: UITextField) {
+            text = textField.text ?? ""
+        }
+        
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            onCommit?()
+            return true
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        return Coordinator(text: $text, onCommit: onCommit)
+    }
     
     func makeUIView(context: Context) -> UITextField {
         let textField = UITextField()
         textField.delegate = context.coordinator
+        textField.font = UIFont.systemFont(ofSize: 22)
+        textField.borderStyle = .none
+        textField.returnKeyType = .done
+        textField.autocorrectionType = .default // Enable autocorrection
+        textField.backgroundColor = .clear
         textField.placeholder = placeholder
-        textField.borderStyle = .roundedRect
-        textField.font = UIFont.systemFont(ofSize: 18)
         
-        // Add "Done" button directly on the keyboard
-        let keyboardType = textField.keyboardType
-        textField.keyboardType = keyboardType
-        textField.returnKeyType = .done // This sets the return key to "Done"
+        // Add padding
+        let paddingView = UIView(frame: CGRect(x: 0, y: 0, width: 20, height: textField.frame.height))
+        textField.leftView = paddingView
+        textField.leftViewMode = .always
         
         return textField
     }
     
     func updateUIView(_ uiView: UITextField, context: Context) {
         uiView.text = text
+        
+        // Manage keyboard focus
+        if isFirstResponder && !uiView.isFirstResponder {
+            uiView.becomeFirstResponder()
+        } else if !isFirstResponder && uiView.isFirstResponder {
+            uiView.resignFirstResponder()
+        }
     }
+}
+
+// Custom large tappable text field
+struct LargeTextField: View {
+    @Binding var text: String
+    var placeholder: String
+    var onTap: (() -> Void)? = nil
     
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UITextFieldDelegate {
-        var parent: KeyboardDismissTextField
-        
-        init(_ parent: KeyboardDismissTextField) {
-            self.parent = parent
+    var body: some View {
+        Button(action: {
+            onTap?()
+        }) {
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .foregroundColor(Color(.placeholderText))
+                        .font(.system(size: 22))
+                        .padding(.leading, 8)
+                }
+                
+                Text(text.isEmpty ? " " : text) // Non-empty even when text is empty
+                    .foregroundColor(.primary)
+                    .font(.system(size: 22))
+                    .padding(.leading, 8)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 80) // Even taller for easier tapping
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.5), lineWidth: 2)
+            )
         }
-        
-        func textFieldDidChangeSelection(_ textField: UITextField) {
-            parent.text = textField.text ?? ""
-        }
-        
-        // Handle "Done" button press on keyboard
-        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-            textField.resignFirstResponder()
-            return true
-        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -127,6 +177,8 @@ struct CalendarEntryEditView: View {
     @State private var entryLocation: String = ""
     @State private var selectedDay: Int = 1
     @State private var isEditSuccessful: Bool = false
+    @State private var isEditingTitle: Bool = false
+    @State private var isEditingLocation: Bool = false
     
     // Month names for displaying month label
     private let monthNames = [
@@ -206,9 +258,13 @@ struct CalendarEntryEditView: View {
                 
                 // Entry form
                 VStack(alignment: .leading, spacing: 20) {
-                    
                     // Day picker
                     VStack(alignment: .leading, spacing: 8) {
+                        Text("Day")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(.bottom, 8)
+                            
                         Picker("Day", selection: $selectedDay) {
                             ForEach(availableDays, id: \.self) { day in
                                 Text("\(day) (\(dayOfWeek(forDay: day)))").tag(day)
@@ -222,25 +278,57 @@ struct CalendarEntryEditView: View {
                     // Title field
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Event Title")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        KeyboardDismissTextField(text: $entryTitle, placeholder: "Event Title")
-                            .padding(.vertical, 12) // Increased vertical padding for larger tap target
-                            .frame(height: 50) // Fixed height to ensure larger tap target
+                            .font(.headline)
+                            .foregroundColor(.primary)
                             .padding(.bottom, 8)
+                        
+                        if isEditingTitle {
+                            // Use UIKit TextField for better keyboard control
+                            CustomKeyboardTextField(text: $entryTitle, isFirstResponder: true, placeholder: "Event Title", onCommit: {
+                                isEditingTitle = false
+                            })
+                            .frame(height: 80) // Even taller for easier tapping
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.blue, lineWidth: 2)
+                            )
+                            .padding(.bottom, 16)
+                        } else {
+                            LargeTextField(text: $entryTitle, placeholder: "Event Title", onTap: {
+                                isEditingTitle = true
+                            })
+                            .padding(.bottom, 16)
+                        }
                     }
                     
                     // Location field
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Location")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        KeyboardDismissTextField(text: $entryLocation, placeholder: "Location")
-                            .padding(.vertical, 12) // Increased vertical padding for larger tap target
-                            .frame(height: 50) // Fixed height to ensure larger tap target
+                            .font(.headline)
+                            .foregroundColor(.primary)
                             .padding(.bottom, 8)
+                        
+                        if isEditingLocation {
+                            // Use UIKit TextField for better keyboard control
+                            CustomKeyboardTextField(text: $entryLocation, isFirstResponder: true, placeholder: "Location", onCommit: {
+                                isEditingLocation = false
+                            })
+                            .frame(height: 80) // Even taller for easier tapping
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.blue, lineWidth: 2)
+                            )
+                            .padding(.bottom, 16)
+                        } else {
+                            LargeTextField(text: $entryLocation, placeholder: "Location", onTap: {
+                                isEditingLocation = true
+                            })
+                            .padding(.bottom, 16)
+                        }
                     }
                     
                     // Success message
@@ -259,6 +347,9 @@ struct CalendarEntryEditView: View {
                     
                     // Save button
                     Button(action: {
+                        // Hide keyboard if it's showing
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        
                         // Save the current entry
                         bluetoothManager.updateCalendarEntry(
                             forMonth: entry.month,
@@ -285,6 +376,7 @@ struct CalendarEntryEditView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
+                    .padding(.top, 8)
                 }
                 .padding()
                 .background(Color(.systemBackground))
@@ -305,11 +397,10 @@ struct CalendarEntryEditView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    // Dismiss the keyboard when tapped outside of a text field
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), 
-                                                  to: nil, 
-                                                  from: nil, 
-                                                  for: nil)
+                    // Dismiss the keyboard and exit editing mode
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    isEditingTitle = false
+                    isEditingLocation = false
                 }
         )
     }
