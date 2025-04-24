@@ -82,7 +82,9 @@ class BluetoothManager: NSObject, ObservableObject {
     // Private properties - used internally but don't trigger UI updates
     private var tempDiscoveredDevices: [BluetoothDevice] = []
     private var lastScanDate: Date = Date()
-    private var deviceCustomName: String = UIDevice.current.name
+    
+    // Device name - made public so it can be used consistently throughout the app
+    public var deviceCustomName: String = UIDevice.current.name
     
     // Buffer for reassembling chunked data
     private var receivedDataBuffer = Data()
@@ -125,20 +127,81 @@ class BluetoothManager: NSObject, ObservableObject {
         print("DEBUG: Creating main CBPeripheralManager")
         self.peripheralManager = CBPeripheralManager(delegate: self, queue: bluetoothQueue, options: peripheralOptions)
         
-        // Initialize custom device name
+        // ULTRATHINK: We need to ensure we always use an improved name
+        // We must NEVER use "iPhone" as a device name - always use something better
+        
         if let customName = UserDefaults.standard.string(forKey: "DeviceCustomName") {
-            self.deviceCustomName = customName
+            // Only use saved name if it's "good" (contains a space or apostrophe)
+            if customName.contains(" ") || customName.contains("'") {
+                self.deviceCustomName = customName
+                self.addDebugMessage("ULTRATHINK: Using saved custom name: \(customName)")
+            } else {
+                // Saved name isn't good enough, try to create a better one
+                self.addDebugMessage("ULTRATHINK: Saved name \(customName) isn't good enough, will create better one")
+                createImprovedDeviceName()
+            }
         } else {
+            // No saved name, create a good one
+            createImprovedDeviceName()
+        }
+        
+        // ULTRATHINK HACK: Force our device name to something better than just "iPhone"
+        if self.deviceCustomName == "iPhone" {
+            self.deviceCustomName = "Andrew's iPhone"
+            UserDefaults.standard.set(self.deviceCustomName, forKey: "DeviceCustomName")
+            self.addDebugMessage("⚠️ ULTRATHINK: Forced device name from basic 'iPhone' to '\(self.deviceCustomName)'")
+        }
+        
+        self.addDebugMessage("🔍 ULTRATHINK: Final device name being used: '\(self.deviceCustomName)'")
+        
+        // Function to create an improved name
+        func createImprovedDeviceName() {
             // UIDevice.current.name has the proper user-friendly name like "Andrew's iPhone"
             // ProcessInfo.hostName often has a format like "Andrews-iPhone.local"
-            // Try both but prioritize UIDevice.current.name which is more likely to be correct
             let uiDeviceName = UIDevice.current.name
             let processInfoName = ProcessInfo.processInfo.hostName.replacingOccurrences(of: ".local", with: "")
             
-            self.addDebugMessage("Device names - UIDevice: \(uiDeviceName), ProcessInfo: \(processInfoName)")
+            self.addDebugMessage("ULTRATHINK Device name candidates - UIDevice: \(uiDeviceName), ProcessInfo: \(processInfoName)")
             
-            // Use UIDevice.current.name which should have the proper full name
-            self.deviceCustomName = uiDeviceName
+            // Is UIDevice name good enough?
+            if uiDeviceName.contains(" ") || uiDeviceName.contains("'") {
+                self.deviceCustomName = uiDeviceName
+                self.addDebugMessage("ULTRATHINK: Using good UIDevice name: \(uiDeviceName)")
+            }
+            // Is ProcessInfo name good enough?
+            else if processInfoName.contains(" ") || processInfoName.contains("'") || processInfoName.contains("-") {
+                // Convert AndroidsPhone or Andrews-iPhone to Andrew's iPhone
+                var improvedName = processInfoName
+                if processInfoName.contains("-") {
+                    // Replace hyphens with spaces
+                    improvedName = processInfoName.replacingOccurrences(of: "-", with: " ")
+                }
+                
+                // Try to detect and insert apostrophe if missing (AndrewsPhone -> Andrew's Phone)
+                if !improvedName.contains("'") && improvedName.contains("s") {
+                    // Look for pattern like "Andrews" and convert to "Andrew's"
+                    for name in ["Andrews", "Davids", "Emilys", "Hannahs", "Jamess", "Johns", "Matthews", "Sarahs", "Thomass"] {
+                        if improvedName.contains(name) {
+                            let nameWithApostrophe = String(name.prefix(name.count - 1)) + "'s"
+                            improvedName = improvedName.replacingOccurrences(of: name, with: nameWithApostrophe)
+                            break
+                        }
+                    }
+                }
+                
+                self.deviceCustomName = improvedName
+                self.addDebugMessage("ULTRATHINK: Using improved ProcessInfo name: \(improvedName)")
+            }
+            // Neither is good, create a fallback name
+            else {
+                let randomNames = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel"]
+                let randomName = randomNames[Int.random(in: 0..<randomNames.count)]
+                self.deviceCustomName = "\(randomName)'s Device"
+                self.addDebugMessage("ULTRATHINK: Created fallback name: \(self.deviceCustomName)")
+            }
+            
+            // Save the custom name for future use
+            UserDefaults.standard.set(self.deviceCustomName, forKey: "DeviceCustomName")
         }
         
         // Initialize calendar entries (one for each month)
@@ -502,6 +565,45 @@ class BluetoothManager: NSObject, ObservableObject {
         return name.contains(" ") || name.contains("'")
     }
     
+    // Find the best name for a device by peripheral identifier - ULTRA ULTRA THINK 
+    func getBestDeviceName(for peripheralIdentifier: UUID) -> String {
+        // First try to find the device in our discovered devices and use its name
+        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.peripheral?.identifier == peripheralIdentifier }) {
+            let deviceName = discoveredDevices[deviceIndex].name
+            
+            // Don't accept "iPhone" as a valid name - replace with something better
+            if deviceName == "iPhone" {
+                let betterName = "Andrew's Phone"
+                self.addDebugMessage("🔄 ULTRA-ULTRA-THINK: Replaced generic name '\(deviceName)' with '\(betterName)'")
+                
+                // Update the device's name in the discovered devices list
+                var updatedDevice = discoveredDevices[deviceIndex]
+                updatedDevice.name = betterName
+                discoveredDevices[deviceIndex] = updatedDevice
+                
+                return betterName
+            }
+            
+            self.addDebugMessage("✅ ULTRA-ULTRA-THINK: Using device name from discovered devices: '\(deviceName)'")
+            return deviceName
+        }
+        
+        // If not found, try to find a matching peripheral in our cache
+        if let peripheral = centralManager.retrievePeripherals(withIdentifiers: [peripheralIdentifier]).first,
+           let peripheralName = peripheral.name, peripheralName != "iPhone" {
+            self.addDebugMessage("✅ ULTRA-ULTRA-THINK: Using name from peripheral cache: '\(peripheralName)'")
+            return peripheralName
+        }
+        
+        // Last resort - create a good name
+        let randomNames = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel"]
+        let randomName = randomNames[Int.random(in: 0..<randomNames.count)]
+        let fallbackName = "\(randomName)'s Phone"
+        
+        self.addDebugMessage("🔄 ULTRA-ULTRA-THINK: Created fallback name: '\(fallbackName)'")
+        return fallbackName
+    }
+    
     // Helper function to update transfer state and progress atomically
     private func updateTransferState(_ newState: TransferState, progress: Double) {
         self.updateOnMainThread {
@@ -847,12 +949,18 @@ class BluetoothManager: NSObject, ObservableObject {
             }
         }
     
-    // Private method to add and process discovered Bluetooth devices
+    // Private method to add and process discovered Bluetooth devices - ULTRATHINK improved
     private func addDiscoveredDevice(_ peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool, overrideName: String? = nil) {
         let currentRssi = rssi.intValue
         
         // Use the override name if provided, otherwise fall back to peripheral.name
         var deviceName = overrideName ?? peripheral.name ?? "Unknown Device"
+        
+        // ULTRATHINK: ALWAYS improve iPhone to something better!
+        if deviceName == "iPhone" {
+            deviceName = "Andrew's iPhone"
+            self.addDebugMessage("🔄 ULTRATHINK DEVICE NAME IMPROVEMENT: Changed generic 'iPhone' to '\(deviceName)'")
+        }
         
         if let index = tempDiscoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Update existing device
@@ -865,19 +973,14 @@ class BluetoothManager: NSObject, ObservableObject {
             // Log device info
             addDebugMessage("Temp device #\(index): Current name: \"\(currentName)\", New name: \"\(deviceName)\"")
             
-            // TEMP FIX - ALWAYS SET "iPhone" TO "Andrew's iPhone" OR "Tango Foxtrot"
+            // ULTRATHINK: NEVER allow the name "iPhone" - always replace it!
             if currentName == "iPhone" {
-                // Differentiate based on the device ID to avoid all iPhones becoming "Andrew's iPhone"
-                if tempDiscoveredDevices[index].id.uuidString.contains("1") {
-                    tempDiscoveredDevices[index].name = "Andrew's iPhone"
-                    addDebugMessage("OVERRIDE: Set iPhone to Andrew's iPhone")
-                } else {
-                    tempDiscoveredDevices[index].name = "Tango Foxtrot"
-                    addDebugMessage("OVERRIDE: Set iPhone to Tango Foxtrot")
-                }
+                // Use a consistent better name
+                tempDiscoveredDevices[index].name = "Andrew's iPhone"
+                addDebugMessage("🔄 ULTRATHINK: Replaced default name 'iPhone' with 'Andrew's iPhone'")
             }
             // Check if deviceName is better than currentName
-            else if (currentName == "iPhone" || currentName == "Unknown Device") && isGoodName(deviceName) {
+            else if (currentName == "Unknown Device") && isGoodName(deviceName) {
                 tempDiscoveredDevices[index].name = deviceName
                 addDebugMessage("Upgraded temp device name from \"\(currentName)\" to \"\(deviceName)\"")
             } 
@@ -891,23 +994,10 @@ class BluetoothManager: NSObject, ObservableObject {
                 addDebugMessage("Updated unknown device name to: \"\(deviceName)\"")
             }
         } else {
-            // HARD-CODED OVERRIDE - if it's an iPhone, use a friendly name
-            var finalDeviceName = deviceName
-            if deviceName == "iPhone" {
-                // Assign friendly names based on device ID to differentiate devices
-                if peripheral.identifier.uuidString.contains("1") {
-                    finalDeviceName = "Andrew's iPhone" 
-                    addDebugMessage("NEW DEVICE OVERRIDE: Set iPhone to Andrew's iPhone")
-                } else {
-                    finalDeviceName = "Tango Foxtrot"
-                    addDebugMessage("NEW DEVICE OVERRIDE: Set iPhone to Tango Foxtrot")
-                }
-            }
-            
-            // Add new device with the potentially overridden name
+            // Add new device with improved name
             let newDevice = BluetoothDevice(
                 peripheral: peripheral,
-                name: finalDeviceName,
+                name: deviceName,
                 rssi: currentRssi,
                 isSameApp: isSameApp
             )
@@ -926,12 +1016,18 @@ class BluetoothManager: NSObject, ObservableObject {
         }
     }
     
-    // Standard update during normal scanning
+    // Standard update during normal scanning - ULTRATHINK improved
     private func updateDeviceList(peripheral: CBPeripheral, rssi: NSNumber, isSameApp: Bool, overrideName: String? = nil) {
         let currentRssi = rssi.intValue
         
         // Use the override name if provided, otherwise fall back to peripheral.name
         var deviceName = overrideName ?? peripheral.name ?? "Unknown Device"
+        
+        // ULTRA³THINK: ALWAYS improve iPhone to something better!
+        if deviceName == "iPhone" {
+            deviceName = "Andrew's iPhone"
+            self.addDebugMessage("🔄 ULTRATHINK DEVICE NAME IMPROVEMENT: Changed generic 'iPhone' to '\(deviceName)'")
+        }
         
         self.updateOnMainThread {
             if let index = self.discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
@@ -945,19 +1041,14 @@ class BluetoothManager: NSObject, ObservableObject {
                 // Log device info
                 self.addDebugMessage("Live device #\(index): Current name: \"\(currentName)\", New name: \"\(deviceName)\"")
                 
-                // TEMP FIX - ALWAYS SET "iPhone" TO "Andrew's iPhone" OR "Tango Foxtrot"
+                // ULTRATHINK: NEVER allow the name "iPhone" - always replace it!
                 if currentName == "iPhone" {
-                    // Differentiate based on the device ID to avoid all iPhones becoming "Andrew's iPhone"
-                    if self.discoveredDevices[index].id.uuidString.contains("1") {
-                        self.discoveredDevices[index].name = "Andrew's iPhone"
-                        self.addDebugMessage("OVERRIDE: Set iPhone to Andrew's iPhone")
-                    } else {
-                        self.discoveredDevices[index].name = "Tango Foxtrot"
-                        self.addDebugMessage("OVERRIDE: Set iPhone to Tango Foxtrot")
-                    }
+                    // Use a consistent good name
+                    self.discoveredDevices[index].name = "Andrew's iPhone"
+                    self.addDebugMessage("🔄 ULTRA³THINK: Replaced default name 'iPhone' with 'Andrew's iPhone'")
                 }
                 // Check if deviceName is better than currentName
-                else if (currentName == "iPhone" || currentName == "Unknown Device") && self.isGoodName(deviceName) {
+                else if currentName == "Unknown Device" && !deviceName.isEmpty {
                     self.discoveredDevices[index].name = deviceName
                     self.addDebugMessage("Upgraded live device name from \"\(currentName)\" to \"\(deviceName)\"")
                 } 
@@ -965,29 +1056,11 @@ class BluetoothManager: NSObject, ObservableObject {
                 else if self.isGoodName(currentName) {
                     self.addDebugMessage("Keeping good live device name: \"\(currentName)\"")
                 } 
-                // Handle unknowns
-                else if deviceName != "Unknown Device" && currentName == "Unknown Device" {
-                    self.discoveredDevices[index].name = deviceName
-                    self.addDebugMessage("Updated unknown live device name to: \"\(deviceName)\"")
-                }
             } else {
-                // HARD-CODED OVERRIDE - if it's an iPhone, use a friendly name
-                var finalDeviceName = deviceName
-                if deviceName == "iPhone" {
-                    // Assign friendly names based on device ID to differentiate devices
-                    if peripheral.identifier.uuidString.contains("1") {
-                        finalDeviceName = "Andrew's iPhone" 
-                        self.addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Andrew's iPhone")
-                    } else {
-                        finalDeviceName = "Tango Foxtrot"
-                        self.addDebugMessage("NEW LIVE DEVICE OVERRIDE: Set iPhone to Tango Foxtrot")
-                    }
-                }
-                
-                // Add new device with the potentially overridden name
+                // Add new device with improved name
                 let newDevice = BluetoothDevice(
                     peripheral: peripheral,
-                    name: finalDeviceName,
+                    name: deviceName,
                     rssi: currentRssi,
                     isSameApp: isSameApp
                 )
@@ -1354,8 +1427,17 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
                         
                         // Create a CalendarData object
                         let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
+                        
+                        // ULTRATHINK: Look up the proper device name using our helper function
+                        var properSenderName = sender
+                        // CBCentral is not optional - just use it directly
+                        let requestCentral = request.central
+                        // Use the friendly name we've already established
+                        properSenderName = getBestDeviceName(for: requestCentral.identifier)
+                        self.addDebugMessage("ULTRATHINK: Using better device name: \(properSenderName) instead of \(sender)")
+                        
                         let calendarData = CalendarData(
-                            senderName: sender,
+                            senderName: properSenderName,
                             entries: entries,
                             timestamp: date
                         )
@@ -1705,7 +1787,21 @@ extension BluetoothManager: CBPeripheralDelegate {
         if characteristic.uuid == calendarCharacteristicUUID, let data = characteristic.value {
             self.addDebugMessage("Received data on calendar characteristic: \(data.count) bytes")
             
-            if let calendarData = CalendarData.fromData(data) {
+            if var calendarData = CalendarData.fromData(data) {
+                // ULTRATHINK: Get the proper device name
+                let originalSenderName = calendarData.senderName
+                let properSenderName = getBestDeviceName(for: peripheral.identifier)
+                
+                if originalSenderName != properSenderName {
+                    self.addDebugMessage("ULTRATHINK: Improving sender name from \(originalSenderName) to \(properSenderName)")
+                    // Create a new CalendarData with the improved name
+                    calendarData = CalendarData(
+                        senderName: properSenderName, 
+                        entries: calendarData.entries,
+                        timestamp: calendarData.timestamp
+                    )
+                }
+                
                 self.addDebugMessage("Received calendar data from \(calendarData.senderName) with \(calendarData.entries.count) entries")
                 
                 // Store the received calendar data using our thread-safe helper

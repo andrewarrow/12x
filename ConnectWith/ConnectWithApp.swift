@@ -355,7 +355,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Device Name:")
                         Spacer()
-                        Text(UIDevice.current.name)
+                        Text(bluetoothManager.deviceCustomName)
                             .foregroundColor(.secondary)
                     }
                 }
